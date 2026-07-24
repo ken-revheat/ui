@@ -1,0 +1,4 @@
+/* Placeholder for @revheat/ui/styles.css — real AppShell/sidebar styles land
+   with the /react export in a later task. Present now only so the package.json
+   compile script (`cp src/styles.css dist/styles.css`, and the `./styles.css`
+   export map entry) — both specified verbatim by the Task 1 brief — succeed. */
