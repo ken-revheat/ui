@@ -9,9 +9,9 @@ describe("PRODUCT_CATALOG", () => {
     expect(findProductByCode("all_access")?.isBundle).toBe(true);
     expect(findProductByCode("training_vault")?.internal).toBe(true);
   });
-  it("marks trend_finder and sell_playbook_consulting unlaunched (in catalog order)", () => {
+  it("marks only sell_playbook_consulting unlaunched (trend_finder launched 2026-07-22)", () => {
     const unlaunched = PRODUCT_CATALOG.filter((p) => p.unlaunched).map((p) => p.code);
-    expect(unlaunched).toEqual(["trend_finder", "sell_playbook_consulting"]);
+    expect(unlaunched).toEqual(["sell_playbook_consulting"]);
   });
   it("every slug is the underscore→hyphen transform of its code", () => {
     for (const p of PRODUCT_CATALOG) expect(p.slug).toBe(p.code.replace(/_/g, "-"));
