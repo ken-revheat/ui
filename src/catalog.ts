@@ -34,7 +34,7 @@ export const PRODUCT_CATALOG: ProductDef[] = [
     appUrl: "https://app.revheat.com/vault", internal: true },
   { code: "trend_finder", slug: "trend-finder", title: "Trend Finder",
     description: "LinkedIn posts from the trends your buyers are reading.",
-    appUrl: "https://trendfinder.revheat.com/app", unlaunched: true },
+    appUrl: "https://trendfinder.revheat.com/app" },
   { code: "readiness_audit", slug: "readiness-audit", title: "Website Readiness Audit",
     description: "Score your website on what moves revenue — with a prioritized fix list, assigned by owner.",
     appUrl: "https://readiness.revheat.com/app" },
