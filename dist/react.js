@@ -1,7 +1,7 @@
 "use client";
 import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
-import { PRODUCT_CATALOG } from "./catalog";
-import { buildRailModel, withSource, upgradeHref, isActiveProduct } from "./core";
+import { PRODUCT_CATALOG } from "./catalog.js";
+import { buildRailModel, withSource, upgradeHref, isActiveProduct } from "./core.js";
 // ── Product icons ──────────────────────────────────────────────────────────
 // Code → inline-SVG path list, consumed at currentColor inside the icon tile.
 // The first six are ported verbatim from the LA portal's RhProductIcon.vue
