@@ -251,9 +251,14 @@ a.rh-rail__link:hover .rh-rail__go {
   background: var(--rh-surface, #ffffff);
 }
 .rh-banner__brand {
-  font-weight: var(--rh-weight-semibold, 600);
-  color: var(--rh-ink, #19191e);
+  display: inline-flex;
+  align-items: center;
   text-decoration: none;
+}
+.rh-banner__wordmark {
+  height: 1.25rem;
+  width: auto;
+  display: block;
 }
 .rh-banner__admin {
   font-size: var(--rh-text-sm, 0.875rem);
