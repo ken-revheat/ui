@@ -13,6 +13,10 @@ describe("PRODUCT_CATALOG", () => {
     const unlaunched = PRODUCT_CATALOG.filter((p) => p.unlaunched).map((p) => p.code);
     expect(unlaunched).toEqual(["sell_playbook_consulting"]);
   });
+  it("marks only sell_playbook_consulting consultingOnly (never on a self-serve sidebar)", () => {
+    const consulting = PRODUCT_CATALOG.filter((p) => p.consultingOnly).map((p) => p.code);
+    expect(consulting).toEqual(["sell_playbook_consulting"]);
+  });
   it("every slug is the underscore→hyphen transform of its code", () => {
     for (const p of PRODUCT_CATALOG) expect(p.slug).toBe(p.code.replace(/_/g, "-"));
   });

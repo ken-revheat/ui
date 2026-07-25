@@ -38,6 +38,35 @@ describe("buildRailModel (degraded path)", () => {
   });
 });
 
+describe("buildRailModel (consulting-only exclusion)", () => {
+  it("never shows a consultingOnly product in entitled, even when launched + owned", () => {
+    const meWithConsulting = {
+      viewerRole: "admin" as const,
+      isPrimaryBuyer: true,
+      products: [
+        { code: "sell_playbook_consulting", state: "launch" as const, appUrl: "https://app.revheat.com", lockReason: null, billingStatus: "active" },
+      ],
+    };
+    const m = buildRailModel({ me: meWithConsulting, degraded: false, productCodesFallback: [], catalog: PRODUCT_CATALOG });
+    expect(m.entitled.map((p) => p.code)).toEqual([]);
+  });
+  it("never offers a consultingOnly product in upsell", () => {
+    const meWithConsulting = {
+      viewerRole: "admin" as const,
+      isPrimaryBuyer: true,
+      products: [
+        { code: "sell_playbook_consulting", state: "available" as const, appUrl: "https://app.revheat.com", lockReason: null, billingStatus: null },
+      ],
+    };
+    const m = buildRailModel({ me: meWithConsulting, degraded: false, productCodesFallback: [], catalog: PRODUCT_CATALOG });
+    expect(m.upsell.map((p) => p.code)).toEqual([]);
+  });
+  it("excludes a consultingOnly product from the degraded fallback rail", () => {
+    const m = buildRailModel({ me: null, degraded: true, productCodesFallback: ["sell_playbook_consulting", "quotafit"], catalog: PRODUCT_CATALOG });
+    expect(m.entitled.map((p) => p.code)).toEqual(["quotafit"]);
+  });
+});
+
 describe("helpers", () => {
   it("withSource appends source=sidebar", () => {
     expect(withSource("https://icp.revheat.com/app")).toBe("https://icp.revheat.com/app?source=sidebar");

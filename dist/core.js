@@ -6,7 +6,7 @@ function withCatalog(products, byCode) {
         return cat ? { ...cat, ...mp } : null;
     })
         .filter((p) => p !== null)
-        .filter((p) => !p.isBundle);
+        .filter((p) => !p.isBundle && !p.consultingOnly);
 }
 export function buildRailModel(input) {
     const byCode = new Map(input.catalog.map((p) => [p.code, p]));
@@ -14,7 +14,7 @@ export function buildRailModel(input) {
     if (usingFallback) {
         const codes = new Set(input.productCodesFallback);
         const entitled = input.catalog
-            .filter((p) => codes.has(p.code) && !p.isBundle)
+            .filter((p) => codes.has(p.code) && !p.isBundle && !p.consultingOnly)
             .map((p) => ({ ...p, state: "launch", lockReason: null, billingStatus: null }));
         return { entitled, upsell: [], canBuy: false, isViewerAdmin: false };
     }

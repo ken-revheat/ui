@@ -29,7 +29,7 @@ export const PRODUCT_CATALOG = [
         appUrl: "https://readiness.revheat.com/app" },
     { code: "sell_playbook_consulting", slug: "sell-playbook-consulting", title: "Sell Playbook (Consulting)",
         description: "A consulting engagement, staff-arranged only.",
-        appUrl: "https://app.revheat.com", unlaunched: true },
+        appUrl: "https://app.revheat.com", unlaunched: true, consultingOnly: true },
     { code: "icp_builder", slug: "icp-builder", title: "ICP Builder",
         description: "Your Ideal Customer Profile — the accounts worth chasing, who to reach inside them, and the message that lands.",
         appUrl: "https://icp.revheat.com/app" },

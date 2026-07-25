@@ -44,7 +44,7 @@ function withCatalog(products: MeProduct[], byCode: Map<string, ProductDef>): Ra
       return cat ? { ...cat, ...mp } : null;
     })
     .filter((p): p is RailProduct => p !== null)
-    .filter((p) => !p.isBundle);
+    .filter((p) => !p.isBundle && !p.consultingOnly);
 }
 
 export function buildRailModel(input: RailInput): RailModel {
@@ -54,7 +54,7 @@ export function buildRailModel(input: RailInput): RailModel {
   if (usingFallback) {
     const codes = new Set(input.productCodesFallback);
     const entitled: RailProduct[] = input.catalog
-      .filter((p) => codes.has(p.code) && !p.isBundle)
+      .filter((p) => codes.has(p.code) && !p.isBundle && !p.consultingOnly)
       .map((p) => ({ ...p, state: "launch" as const, lockReason: null, billingStatus: null }));
     return { entitled, upsell: [], canBuy: false, isViewerAdmin: false };
   }
