@@ -1,10 +1,292 @@
-/* Shell chrome — the single source; apps import '@revheat/ui/styles.css'. */
-.rh-shell { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
-.rh-rail { display: flex; flex-direction: column; gap: 1rem; padding: 1rem; border-right: 1px solid var(--rh-border, #e5e7eb); }
-.rh-rail__heading { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: var(--rh-text-muted, #6b7280); }
-.rh-rail__link { display: block; padding: .5rem .5rem; border-radius: .375rem; color: inherit; text-decoration: none; }
-.rh-rail__link:hover { background: var(--rh-surface-subtle, #f3f4f6); }
-.rh-rail__account { margin-top: auto; display: flex; align-items: center; gap: .5rem; }
-.rh-banner { display: flex; justify-content: space-between; align-items: center; padding: .75rem 1rem; border-bottom: 1px solid var(--rh-border, #e5e7eb); }
-.rh-footer { display: flex; gap: 1rem; padding: 1rem; border-top: 1px solid var(--rh-border, #e5e7eb); font-size: .875rem; }
-@media (max-width: 900px) { .rh-shell { grid-template-columns: 1fr; } .rh-rail { display: none; } }
+/* ==========================================================================
+   RevHeat shared shell chrome — the single source; apps import
+   '@revheat/ui/styles.css'. Visual values are ported from the LA portal's
+   RhSidebarRail.vue `.rail-*` styles onto the `.rh-rail__*` contract classes.
+   Every design value is a var(--rh-*, <fallback>) reference: the consumer app
+   loads @revheat/design-tokens globally; the fallbacks keep the shell sane if
+   a token is momentarily missing. Do NOT @import design-tokens here.
+   ========================================================================== */
+
+/* ── Layout ───────────────────────────────────────────────────────────── */
+.rh-shell {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+  font-family: var(--rh-font-ui, "Geist", ui-sans-serif, system-ui, sans-serif);
+  color: var(--rh-ink, #19191e);
+  background: var(--rh-bg, #fcfcfc);
+}
+.rh-shell__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* ── Rail ─────────────────────────────────────────────────────────────── */
+.rh-rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rh-space-4, 1rem);
+  padding: var(--rh-space-4, 1rem) var(--rh-space-2, 0.5rem) var(--rh-space-2, 0.5rem);
+  border-right: 1px solid var(--rh-border, #e4e5ea);
+  background: var(--rh-surface, #ffffff);
+}
+
+/* No list markers, ever — this is the guard against the rollback's #1 defect
+   (browser-default sidebar bullets). */
+.rh-rail ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* Rail head: the brand R mark (not a text link). */
+.rh-rail__home {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--rh-space-1, 0.25rem) var(--rh-space-3, 0.75rem) 0;
+  color: var(--rh-primary, #6143f9);
+  text-decoration: none;
+}
+.rh-rail__mark {
+  height: 1.5rem;
+  width: auto;
+  display: block;
+}
+
+/* Sections + eyebrow headings (small, uppercase, muted). */
+.rh-rail__section {
+  display: flex;
+  flex-direction: column;
+}
+.rh-rail__heading {
+  margin: 0;
+  font-size: var(--rh-text-xs, 0.75rem);
+  line-height: var(--rh-leading-xs, 1rem);
+  font-weight: var(--rh-weight-medium, 500);
+  text-transform: uppercase;
+  letter-spacing: var(--rh-tracking-wide, 0.06em);
+  color: var(--rh-text-muted, #6c6c73);
+  padding: var(--rh-space-2, 0.5rem) var(--rh-space-3, 0.75rem) var(--rh-space-1, 0.25rem);
+}
+
+/* Product row (the anchor IS the row). */
+.rh-rail__item {
+  margin: 0;
+  padding: 0;
+}
+.rh-rail__link {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-3, 0.75rem);
+  min-height: var(--rh-row-comfortable, 3rem);
+  padding: var(--rh-space-2, 0.5rem) var(--rh-space-3, 0.75rem);
+  border-radius: var(--rh-radius-md, 12px);
+  text-decoration: none;
+  font-size: var(--rh-text-sm, 0.875rem);
+  line-height: var(--rh-leading-sm, 1.25rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-ink, #19191e);
+  transition: background-color var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+a.rh-rail__link:hover {
+  background: var(--rh-n-100, #eff0f4);
+}
+.rh-rail__link--muted {
+  color: var(--rh-text-secondary, #505057);
+  cursor: default;
+}
+
+.rh-rail__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Icon tile — 32px square, subtle fill, muted glyph. */
+.rh-rail__tile {
+  width: var(--rh-space-8, 2rem);
+  height: var(--rh-space-8, 2rem);
+  flex: 0 0 var(--rh-space-8, 2rem);
+  display: grid;
+  place-items: center;
+  border-radius: var(--rh-radius-sm, 8px);
+  background: var(--rh-n-100, #eff0f4);
+  color: var(--rh-text-muted, #6c6c73);
+}
+.rh-rail__glyph {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
+}
+
+/* Active product's row (the vault route, aria-current). */
+a.rh-rail__link[aria-current="page"] {
+  background: var(--rh-primary-subtle, #edefff);
+  color: var(--rh-primary, #6143f9);
+  font-weight: var(--rh-weight-semibold, 600);
+}
+
+/* ── Available (upsell) rows: top-aligned, two-line, secondary text ─────── */
+.rh-rail__item--upsell .rh-rail__link {
+  align-items: flex-start;
+  color: var(--rh-text-secondary, #505057);
+}
+.rh-rail__item--upsell .rh-rail__tile {
+  margin-top: var(--rh-space-1, 0.25rem);
+}
+.rh-rail__col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.rh-rail__go {
+  font-size: var(--rh-text-xs, 0.75rem);
+  line-height: var(--rh-leading-xs, 1rem);
+  color: var(--rh-primary, #6143f9);
+  font-weight: var(--rh-weight-medium, 500);
+}
+a.rh-rail__link:hover .rh-rail__go {
+  text-decoration: underline;
+}
+
+/* "Coming soon" pill (neutral badge). */
+.rh-rail__soon {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--rh-radius-full, 9999px);
+  padding: 0.125rem var(--rh-space-2, 0.5rem);
+  font-size: var(--rh-text-xs, 0.75rem);
+  line-height: var(--rh-leading-xs, 1rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-text-muted, #6c6c73);
+  background: var(--rh-n-100, #eff0f4);
+  white-space: nowrap;
+}
+
+/* ── Account block, pinned to the bottom ───────────────────────────────── */
+.rh-rail__account {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rh-space-2, 0.5rem);
+  border-top: 1px solid var(--rh-border, #e4e5ea);
+  padding: var(--rh-space-3, 0.75rem) var(--rh-space-3, 0.75rem) var(--rh-space-1, 0.25rem);
+}
+.rh-rail__account-id {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-3, 0.75rem);
+  min-width: 0;
+}
+.rh-rail__avatar {
+  display: grid;
+  place-items: center;
+  width: var(--rh-space-8, 2rem);
+  height: var(--rh-space-8, 2rem);
+  flex: 0 0 var(--rh-space-8, 2rem);
+  border-radius: var(--rh-radius-sm, 8px);
+  background: var(--rh-primary, #6143f9);
+  color: var(--rh-primary-foreground, #ffffff);
+  font-size: var(--rh-text-xs, 0.75rem);
+  font-weight: var(--rh-weight-semibold, 600);
+  user-select: none;
+}
+.rh-rail__account-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.125rem;
+  min-width: 0;
+}
+.rh-rail__email {
+  font-size: var(--rh-text-sm, 0.875rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-ink, #19191e);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rh-rail__role {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--rh-radius-full, 9999px);
+  padding: 0.125rem var(--rh-space-2, 0.5rem);
+  font-size: var(--rh-text-xs, 0.75rem);
+  line-height: var(--rh-leading-xs, 1rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-primary, #6143f9);
+  background: var(--rh-primary-subtle, #edefff);
+  border: 1px solid var(--rh-primary-border, #bdc1fe);
+}
+.rh-rail__signout {
+  align-self: flex-start;
+  padding: var(--rh-space-1, 0.25rem) var(--rh-space-2, 0.5rem);
+  margin-left: calc(var(--rh-space-8, 2rem) + var(--rh-space-3, 0.75rem));
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--rh-radius-sm, 8px);
+  font-family: inherit;
+  font-size: var(--rh-text-xs, 0.75rem);
+  line-height: var(--rh-leading-xs, 1rem);
+  color: var(--rh-text-muted, #6c6c73);
+  transition: background-color var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.rh-rail__signout:hover {
+  background: var(--rh-n-100, #eff0f4);
+}
+
+/* ── Banner + footer ──────────────────────────────────────────────────── */
+.rh-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--rh-space-3, 0.75rem) var(--rh-space-4, 1rem);
+  border-bottom: 1px solid var(--rh-border, #e4e5ea);
+  background: var(--rh-surface, #ffffff);
+}
+.rh-banner__brand {
+  font-weight: var(--rh-weight-semibold, 600);
+  color: var(--rh-ink, #19191e);
+  text-decoration: none;
+}
+.rh-banner__admin {
+  font-size: var(--rh-text-sm, 0.875rem);
+  color: var(--rh-primary, #6143f9);
+  text-decoration: none;
+}
+.rh-banner__admin:hover {
+  text-decoration: underline;
+}
+.rh-footer {
+  display: flex;
+  gap: var(--rh-space-4, 1rem);
+  padding: var(--rh-space-4, 1rem);
+  margin-top: auto;
+  border-top: 1px solid var(--rh-border, #e4e5ea);
+  font-size: var(--rh-text-sm, 0.875rem);
+  color: var(--rh-text-muted, #6c6c73);
+}
+.rh-footer a {
+  color: var(--rh-text-secondary, #505057);
+  text-decoration: none;
+}
+.rh-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ── Responsive: hide the rail below the drawer breakpoint (no drawer in
+   scope — the rail simply collapses out, main content takes full width). ── */
+@media (max-width: 900px) {
+  .rh-shell {
+    grid-template-columns: 1fr;
+  }
+  .rh-rail {
+    display: none;
+  }
+}
