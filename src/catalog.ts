@@ -7,6 +7,13 @@ export type ProductDef = {
   internal?: boolean;
   unlaunched?: boolean;
   isBundle?: boolean;
+  // Consulting-delivered, staff-arranged product. NEVER shown in a self-serve
+  // sidebar — not as an owned tile, not as an upsell — even once it launches.
+  // This is a permanent property of the product, distinct from `unlaunched`
+  // (a temporary "coming soon"): a consulting engagement is reached through the
+  // engagement, never sold or navigated from the self-serve rail. Excluded in
+  // core.ts buildRailModel (both rails, both the live and degraded paths).
+  consultingOnly?: boolean;
 };
 
 // Source of truth for the sidebar product list across every RevHeat portal app.
@@ -40,7 +47,7 @@ export const PRODUCT_CATALOG: ProductDef[] = [
     appUrl: "https://readiness.revheat.com/app" },
   { code: "sell_playbook_consulting", slug: "sell-playbook-consulting", title: "Sell Playbook (Consulting)",
     description: "A consulting engagement, staff-arranged only.",
-    appUrl: "https://app.revheat.com", unlaunched: true },
+    appUrl: "https://app.revheat.com", unlaunched: true, consultingOnly: true },
   { code: "icp_builder", slug: "icp-builder", title: "ICP Builder",
     description: "Your Ideal Customer Profile — the accounts worth chasing, who to reach inside them, and the message that lands.",
     appUrl: "https://icp.revheat.com/app" },

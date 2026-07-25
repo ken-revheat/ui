@@ -7,6 +7,7 @@ export type ProductDef = {
     internal?: boolean;
     unlaunched?: boolean;
     isBundle?: boolean;
+    consultingOnly?: boolean;
 };
 export declare const PRODUCT_CATALOG: ProductDef[];
 export declare function findProductByCode(code: string): ProductDef | null;
