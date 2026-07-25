@@ -7,6 +7,29 @@
    a token is momentarily missing. Do NOT @import design-tokens here.
    ========================================================================== */
 
+/* ── Reset ────────────────────────────────────────────────────────────────
+   The shell owns its own box model rather than depending on the consumer app's
+   reset. Without this, `.rh-rail__link`'s min-height (48px) and padding (2×8px)
+   stack to a 64px row under the CSS default (content-box) — chunkier than the
+   reference LA portal's 48px rows, which get border-box from Tailwind preflight.
+   Scoped to the chrome the shell OWNS (rail, banner, footer) — deliberately NOT
+   `.rh-shell *`, which would reach into the consumer app's page content
+   (`{children}` renders inside `.rh-shell__main`) and override its own reset. ── */
+.rh-rail,
+.rh-rail *,
+.rh-rail *::before,
+.rh-rail *::after,
+.rh-banner,
+.rh-banner *,
+.rh-banner *::before,
+.rh-banner *::after,
+.rh-footer,
+.rh-footer *,
+.rh-footer *::before,
+.rh-footer *::after {
+  box-sizing: border-box;
+}
+
 /* ── Layout ───────────────────────────────────────────────────────────── */
 .rh-shell {
   display: grid;

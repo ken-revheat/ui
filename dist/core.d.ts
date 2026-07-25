@@ -1,4 +1,4 @@
-import type { ProductDef } from "./catalog";
+import type { ProductDef } from "./catalog.js";
 export type ProductState = "launch" | "locked_billing" | "available" | "needs_grant";
 export interface MeProduct {
     code: string;

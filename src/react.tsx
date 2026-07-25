@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
-import { PRODUCT_CATALOG } from "./catalog";
-import { buildRailModel, withSource, upgradeHref, isActiveProduct, type MeProduct, type RailProduct } from "./core";
+import { PRODUCT_CATALOG } from "./catalog.js";
+import { buildRailModel, withSource, upgradeHref, isActiveProduct, type MeProduct, type RailProduct } from "./core.js";
 
 export interface AppShellIdentity {
   email: string | null;

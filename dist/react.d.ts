@@ -1,5 +1,5 @@
 import * as React from "react";
-import { type MeProduct } from "./core";
+import { type MeProduct } from "./core.js";
 export interface AppShellIdentity {
     email: string | null;
     isInternal: boolean;
