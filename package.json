@@ -1,6 +1,6 @@
 {
   "name": "@revheat/ui",
-  "version": "0.1.0",
+  "version": "1.1.0",
   "type": "module",
   "sideEffects": ["*.css"],
   "//scripts": "Named 'compile' NOT 'build' on purpose: pacote treats a 'build' (or prepare/install/prepack) script as a trigger to run `npm install` inside the git-dep clone, which pulls this package's devDeps and crashes arborist. dist/ is committed, so consumers never build. After editing src/, run `npm run compile` and commit dist/.",
