@@ -1,6 +1,6 @@
 {
   "name": "@revheat/ui",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "type": "module",
   "sideEffects": ["*.css"],
   "//scripts": "Named 'compile' NOT 'build' on purpose: pacote treats a 'build' (or prepare/install/prepack) script as a trigger to run `npm install` inside the git-dep clone, which pulls this package's devDeps and crashes arborist. dist/ is committed, so consumers never build. After editing src/, run `npm run compile` and commit dist/.",
@@ -8,14 +8,18 @@
     ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
     "./catalog": { "types": "./dist/catalog.d.ts", "default": "./dist/catalog.js" },
     "./core": { "types": "./dist/core.d.ts", "default": "./dist/core.js" },
+    "./icons": { "types": "./dist/icons.d.ts", "default": "./dist/icons.js" },
     "./react": { "types": "./dist/react.d.ts", "default": "./dist/react.js" },
     "./styles.css": "./dist/styles.css",
     "./package.json": "./package.json"
   },
   "files": ["dist"],
+  "//verify": "Run this before tagging a release. Every spec imports ../src/*, so a stale dist/ passes the whole suite green while shipping the OLD code to all four consumer apps — the exact drift the /icons export exists to end. This is the only thing that catches it, and it cannot be a prepare/prepack hook (see //scripts above).",
   "scripts": {
     "compile": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
-    "test": "vitest run"
+    "test": "vitest run",
+    "check:dist": "[ -z \"$(git status --porcelain -- dist)\" ] || { echo 'dist/ is stale or has untracked files. Run: npm run compile, then commit dist/'; exit 1; }",
+    "verify": "npm run compile && npm test && npm run check:dist"
   },
   "peerDependencies": {
     "react": ">=18",

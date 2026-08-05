@@ -18,8 +18,12 @@ in that consumer's environment).
 - `@revheat/ui/catalog` — the canonical product catalog (`PRODUCT_CATALOG`,
   `findProductByCode`, `findProductBySlug`) shared by every portal app's
   product list / sidebar.
-- `@revheat/ui/core` — headless sidebar core (later task).
-- `@revheat/ui/react` — React `<AppShell>` (later task).
+- `@revheat/ui/core` — headless sidebar core (`buildRailModel` and friends).
+- `@revheat/ui/icons` — product glyph path data (`PRODUCT_ICON_PATHS`,
+  `iconPathsFor`). Framework-neutral inline-SVG `d` strings so the Vue portals
+  render the SAME glyphs as the React shell. Draw them at `currentColor` with
+  `fill-rule="evenodd"` (the ring glyphs are outlines, not solids).
+- `@revheat/ui/react` — React `<AppShell>`.
 
 ## Scripts
 
