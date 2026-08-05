@@ -14,11 +14,17 @@
    reference LA portal's 48px rows, which get border-box from Tailwind preflight.
    Scoped to the chrome the shell OWNS (rail, banner, footer) — deliberately NOT
    `.rh-shell *`, which would reach into the consumer app's page content
-   (`{children}` renders inside `.rh-shell__main`) and override its own reset. ── */
+   (`{children}` renders inside `.rh-shell__main`) and override its own reset.
+   The drawer needs its own entry: it is portaled to <body>, so it is a sibling
+   of `.rh-shell` rather than a descendant of any block listed here. ── */
 .rh-rail,
 .rh-rail *,
 .rh-rail *::before,
 .rh-rail *::after,
+.rh-drawer,
+.rh-drawer *,
+.rh-drawer *::before,
+.rh-drawer *::after,
 .rh-banner,
 .rh-banner *,
 .rh-banner *::before,
@@ -199,12 +205,6 @@ a.rh-rail__link:hover .rh-rail__go {
   border-top: 1px solid var(--rh-border, #e4e5ea);
   padding: var(--rh-space-3, 0.75rem) var(--rh-space-3, 0.75rem) var(--rh-space-1, 0.25rem);
 }
-.rh-rail__account-id {
-  display: flex;
-  align-items: center;
-  gap: var(--rh-space-3, 0.75rem);
-  min-width: 0;
-}
 .rh-rail__avatar {
   display: grid;
   place-items: center;
@@ -246,29 +246,89 @@ a.rh-rail__link:hover .rh-rail__go {
   background: var(--rh-primary-subtle, #edefff);
   border: 1px solid var(--rh-primary-border, #bdc1fe);
 }
-.rh-rail__signout {
-  align-self: flex-start;
-  padding: var(--rh-space-1, 0.25rem) var(--rh-space-2, 0.5rem);
-  margin-left: calc(var(--rh-space-8, 2rem) + var(--rh-space-3, 0.75rem));
+/* ── Account menu (button + popover) ───────────────────────────────────────
+   The popover opens UPWARD: the account block is pinned to the bottom of the
+   rail, so a downward menu would open off-screen. Same as the portal. ── */
+.rh-rail__account-menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+.rh-rail__account-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-3, 0.75rem);
+  width: 100%;
+  min-width: 0;
+  padding: var(--rh-space-2, 0.5rem);
   border: 0;
+  border-radius: var(--rh-radius-md, 12px);
   background: transparent;
-  cursor: pointer;
-  border-radius: var(--rh-radius-sm, 8px);
   font-family: inherit;
-  font-size: var(--rh-text-xs, 0.75rem);
-  line-height: var(--rh-leading-xs, 1rem);
-  color: var(--rh-text-muted, #6c6c73);
+  text-align: left;
+  cursor: pointer;
   transition: background-color var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
 }
-.rh-rail__signout:hover {
+.rh-rail__account-trigger:hover {
   background: var(--rh-n-100, #eff0f4);
+}
+.rh-rail__caret {
+  width: 1rem;
+  height: 1rem;
+  flex: 0 0 1rem;
+  margin-left: auto;
+  color: var(--rh-text-muted, #6c6c73);
+  transition: transform var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.rh-rail__account-trigger[aria-expanded="true"] .rh-rail__caret {
+  transform: rotate(180deg);
+}
+.rh-rail__menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  z-index: var(--rh-z-popover, 1400);
+  margin-bottom: var(--rh-space-2, 0.5rem);
+  display: flex;
+  flex-direction: column;
+  padding: var(--rh-space-1, 0.25rem);
+  border: 1px solid var(--rh-border, #e4e5ea);
+  border-radius: var(--rh-radius-md, 12px);
+  background: var(--rh-surface, #ffffff);
+  box-shadow: var(--rh-shadow-lg, 0 12px 32px rgba(25, 25, 30, 0.14));
+}
+.rh-rail__menu-item {
+  display: block;
+  width: 100%;
+  padding: var(--rh-space-2, 0.5rem) var(--rh-space-3, 0.75rem);
+  border: 0;
+  border-radius: var(--rh-radius-sm, 8px);
+  background: transparent;
+  font-family: inherit;
+  font-size: var(--rh-text-sm, 0.875rem);
+  line-height: var(--rh-leading-sm, 1.25rem);
+  text-align: left;
+  text-decoration: none;
+  color: var(--rh-ink, #19191e);
+  cursor: pointer;
+}
+.rh-rail__menu-item:hover,
+.rh-rail__menu-item:focus-visible {
+  background: var(--rh-n-100, #eff0f4);
+}
+.rh-rail__menu-item--signout {
+  color: var(--rh-text-secondary, #505057);
 }
 
 /* ── Banner + footer ──────────────────────────────────────────────────── */
 .rh-banner {
   display: flex;
-  justify-content: space-between;
+  /* `margin-right: auto` on the brand does the job space-between used to, and
+     survives the hamburger becoming a third child on narrow screens. */
+  justify-content: flex-start;
   align-items: center;
+  gap: var(--rh-space-3, 0.75rem);
   padding: var(--rh-space-3, 0.75rem) var(--rh-space-4, 1rem);
   border-bottom: 1px solid var(--rh-border, #e4e5ea);
   background: var(--rh-surface, #ffffff);
@@ -276,7 +336,34 @@ a.rh-rail__link:hover .rh-rail__go {
 .rh-banner__brand {
   display: inline-flex;
   align-items: center;
+  margin-right: auto;
   text-decoration: none;
+}
+
+/* Drawer trigger. Hidden by CSS rather than by a JS breakpoint check so it is
+   already correct on the first paint, before hydration. */
+.rh-banner__menu {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--rh-space-9, 2.25rem);
+  height: var(--rh-space-9, 2.25rem);
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--rh-radius-sm, 8px);
+  background: transparent;
+  color: var(--rh-text-secondary, #505057);
+  cursor: pointer;
+  transition: background-color var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.rh-banner__menu:hover {
+  background: var(--rh-n-100, #eff0f4);
+}
+.rh-banner__menu-glyph {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
 }
 .rh-banner__wordmark {
   height: 1.25rem;
@@ -308,13 +395,117 @@ a.rh-rail__link:hover .rh-rail__go {
   text-decoration: underline;
 }
 
-/* ── Responsive: hide the rail below the drawer breakpoint (no drawer in
-   scope — the rail simply collapses out, main content takes full width). ── */
+/* ── Drawer (narrow screens) ───────────────────────────────────────────────
+   The panel carries `.rh-rail` too, so every rail style above applies to it
+   unchanged — the drawer is the same rail, relocated, not a second design.
+
+   NOTE: the drawer is portaled to <body>, so it is a SIBLING of `.rh-shell`,
+   not a descendant. `--rh-*` tokens reach it only if the consumer defines them
+   on `:root` (or `html`/`body`), which is how @revheat/design-tokens ships
+   them. An app that scopes the tokens to its own wrapper div gets the literal
+   fallbacks below in the drawer and the real tokens in the wide rail. ── */
+.rh-drawer__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--rh-z-overlay, 1200);
+  /* Fallback first for browsers without color-mix: a scrim that renders fully
+     transparent is invisible AND still swallows every click. */
+  background: rgba(25, 25, 30, 0.4);
+  background: color-mix(in oklab, var(--rh-ink, #19191e) 40%, transparent);
+  animation: rh-drawer-fade-in var(--rh-duration-slow, 300ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.rh-drawer__panel {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--rh-z-modal, 1300);
+  width: 18rem; /* 288px — the portal's w-72 */
+  max-width: 85vw;
+  overflow-y: auto;
+  border-right: 1px solid var(--rh-border, #e4e5ea);
+  animation: rh-drawer-slide-in var(--rh-duration-slow, 300ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+/* Exit: the panel stays mounted for one --rh-duration-slow after close (see
+   useDrawer in react.tsx) purely so these run.
+
+   `pointer-events: none` on the whole thing is the important line. The scrim
+   fades to opacity 0 but stays a full-viewport fixed layer at z-index 1200
+   until it unmounts; without this it goes on eating every click for the length
+   of the animation, and the user's second tap — the one they make because the
+   first appeared to do nothing — lands on nothing. */
+.rh-drawer--closing {
+  pointer-events: none;
+}
+.rh-drawer--closing .rh-drawer__scrim {
+  animation: rh-drawer-fade-in var(--rh-duration-slow, 300ms) var(--rh-ease-in, cubic-bezier(0.55, 0, 1, 0.45)) reverse forwards;
+}
+.rh-drawer--closing .rh-drawer__panel {
+  animation: rh-drawer-slide-in var(--rh-duration-slow, 300ms) var(--rh-ease-in, cubic-bezier(0.55, 0, 1, 0.45)) reverse forwards;
+}
+.rh-drawer__close {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--rh-space-9, 2.25rem);
+  height: var(--rh-space-9, 2.25rem);
+  flex: 0 0 auto;
+  margin-bottom: calc(-1 * var(--rh-space-9, 2.25rem));
+  padding: 0;
+  border: 0;
+  border-radius: var(--rh-radius-sm, 8px);
+  background: transparent;
+  color: var(--rh-text-secondary, #505057);
+  cursor: pointer;
+}
+.rh-drawer__close:hover {
+  background: var(--rh-n-100, #eff0f4);
+}
+.rh-drawer__close-glyph {
+  width: 1.25rem;
+  height: 1.25rem;
+  display: block;
+}
+
+@keyframes rh-drawer-slide-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@keyframes rh-drawer-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Motion is decoration here; the drawer must still appear and disappear. */
+@media (prefers-reduced-motion: reduce) {
+  .rh-drawer__scrim,
+  .rh-drawer__panel,
+  .rh-drawer--closing .rh-drawer__scrim,
+  .rh-drawer--closing .rh-drawer__panel {
+    animation-duration: 1ms;
+  }
+}
+
+/* ── Responsive: below the breakpoint the rail collapses out and the drawer
+   takes over. `:not(.rh-rail--drawer)` matters — the drawer panel IS a
+   `.rh-rail`, and hiding it here would leave the menu button opening nothing. ── */
 @media (max-width: 900px) {
   .rh-shell {
     grid-template-columns: 1fr;
   }
-  .rh-rail {
+  .rh-rail:not(.rh-rail--drawer) {
     display: none;
+  }
+  .rh-banner__menu {
+    display: inline-flex;
   }
 }

@@ -71,8 +71,12 @@ describe("helpers", () => {
   it("withSource appends source=sidebar", () => {
     expect(withSource("https://icp.revheat.com/app")).toBe("https://icp.revheat.com/app?source=sidebar");
   });
-  it("upgradeHref builds the /products/<slug>/upgrade path", () => {
-    expect(upgradeHref("icp-builder", "sidebar")).toBe("/products/icp-builder/upgrade?source=sidebar");
+  it("upgradeHref points at the PORTAL's upgrade page, absolutely", () => {
+    // Relative would resolve against icp.revheat.com / readiness.revheat.com,
+    // neither of which has a /products route — the link 404'd until v1.4.0.
+    expect(upgradeHref("icp-builder", "sidebar")).toBe(
+      "https://app.revheat.com/products/icp-builder/upgrade?source=sidebar",
+    );
   });
   it("isActiveProduct matches training_vault under /vault", () => {
     const vault = { code: "training_vault", slug: "training-vault", title: "", description: "", appUrl: "", state: "launch" as const, lockReason: null, billingStatus: null };
