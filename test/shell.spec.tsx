@@ -1,0 +1,561 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
+import { AppShell, type AppShellIdentity } from "../src/react";
+
+/**
+ * happy-dom reports innerWidth 1024 and ships no matchMedia that tracks it, so
+ * `useIsNarrow` is false unless we say otherwise — i.e. every test below runs on
+ * a "desktop" unless it opts in. `setViewport(true)` installs a controllable
+ * matchMedia so the narrow path (the ONLY path where the drawer is reachable in
+ * production) can be exercised, and so a resize past the breakpoint can be fired.
+ */
+let listeners: Array<() => void> = [];
+let narrow = false;
+function setViewport(isNarrow: boolean) {
+  narrow = isNarrow;
+  listeners.forEach((fn) => fn());
+}
+beforeEach(() => {
+  listeners = [];
+  narrow = false;
+  window.matchMedia = ((query: string) => ({
+    media: query,
+    get matches() {
+      return narrow;
+    },
+    addEventListener: (_: string, fn: () => void) => listeners.push(fn),
+    removeEventListener: (_: string, fn: () => void) => {
+      listeners = listeners.filter((l) => l !== fn);
+    },
+  })) as unknown as typeof window.matchMedia;
+});
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+const products = [
+  {
+    code: "readiness_audit",
+    state: "launch" as const,
+    appUrl: "https://readiness.revheat.com/app",
+    lockReason: null,
+    billingStatus: "active",
+  },
+  {
+    code: "trend_finder",
+    state: "launch" as const,
+    appUrl: "https://trends.revheat.com/app",
+    lockReason: null,
+    billingStatus: "active",
+  },
+  {
+    code: "icp_builder",
+    state: "available" as const,
+    appUrl: "https://icp.revheat.com/app",
+    lockReason: null,
+    billingStatus: null,
+  },
+];
+
+const member: AppShellIdentity = { email: "rep@acme.com", isInternal: false, roleLabel: "Rep" };
+
+function renderShell(props: Partial<React.ComponentProps<typeof AppShell>> = {}) {
+  return render(
+    <AppShell identity={member} products={products} activePath="/app" {...props}>
+      <main>content</main>
+    </AppShell>,
+  );
+}
+
+describe("viewer role drives canBuy", () => {
+  it("hides the buy link from a rep who is not the primary buyer", () => {
+    renderShell({ viewerRole: "rep", isPrimaryBuyer: false });
+    expect(screen.queryByRole("link", { name: /See plans/ })).toBeNull();
+    // The row is still listed, just not actionable.
+    expect(screen.getByText("ICP Builder")).toBeTruthy();
+  });
+
+  it("shows the buy link to a rep who IS the primary buyer", () => {
+    renderShell({ viewerRole: "rep", isPrimaryBuyer: true });
+    expect(screen.getByRole("link", { name: /See plans/ })).toBeTruthy();
+  });
+
+  it("shows the buy link to a manager", () => {
+    renderShell({ viewerRole: "manager", isPrimaryBuyer: false });
+    expect(screen.getByRole("link", { name: /See plans/ })).toBeTruthy();
+  });
+
+  it("falls back to the permissive guess when the app passes no role", () => {
+    // Documents the compatibility fallback deliberately: a consumer that has
+    // not been updated keeps today's behaviour rather than losing its links.
+    renderShell();
+    expect(screen.getByRole("link", { name: /See plans/ })).toBeTruthy();
+  });
+});
+
+describe("viewer role drives canBuy — partial adoption", () => {
+  it("fails closed when the app sends a role but forgets isPrimaryBuyer", () => {
+    // Half-adopted consumer. Guessing `true` here would hand a rep the exact
+    // checkout link the portal refuses — the guess is only defensible when the
+    // app has told us nothing at all.
+    renderShell({ viewerRole: "rep" });
+    expect(screen.queryByRole("link", { name: /See plans/ })).toBeNull();
+  });
+
+  it("sends buyers to the portal, not to a route the product app does not have", () => {
+    // Relative "/products/..." resolves against icp.revheat.com and 404s; the
+    // upgrade page exists only on the portal.
+    renderShell({ viewerRole: "manager" });
+    expect(screen.getByRole("link", { name: /See plans/ }).getAttribute("href")).toBe(
+      "https://app.revheat.com/products/icp-builder/upgrade?source=sidebar",
+    );
+  });
+});
+
+// The vault is the ONE product the portal's original path rule knows about, so
+// it is the only fixture that can prove `currentProductCode` overrides it.
+const vaultProducts = [
+  ...products,
+  {
+    code: "training_vault",
+    state: "launch" as const,
+    appUrl: "https://app.revheat.com/vault",
+    lockReason: null,
+    billingStatus: "active",
+  },
+];
+const currentLinks = () =>
+  screen
+    .getAllByRole("link")
+    .filter((el) => el.getAttribute("aria-current") === "page")
+    .map((el) => el.textContent);
+
+describe("active product row", () => {
+  it("marks the row named by currentProductCode, and only that row", () => {
+    renderShell({ currentProductCode: "trend_finder" });
+    expect(currentLinks()).toEqual(["Trend Finder"]);
+  });
+
+  it("keeps the portal's vault rule for callers that pass no product code", () => {
+    renderShell({ products: vaultProducts, activePath: "/vault/module-3" });
+    expect(currentLinks()).toEqual(["Training Vault"]);
+  });
+
+  it("lets an explicit product code override the vault rule", () => {
+    // A product app can legitimately be on a /vault path of its own. Its own
+    // code is the reliable signal and must win.
+    renderShell({
+      products: vaultProducts,
+      activePath: "/vault/module-3",
+      currentProductCode: "trend_finder",
+    });
+    expect(currentLinks()).toEqual(["Trend Finder"]);
+  });
+
+  it("marks nothing when an app computes an empty product code", () => {
+    // "" is a bug in the caller, not a request for the vault fallback.
+    renderShell({ products: vaultProducts, activePath: "/vault", currentProductCode: "" });
+    expect(currentLinks()).toEqual([]);
+  });
+
+  it("marks nothing when the app names no product and the path is not the vault", () => {
+    renderShell({ activePath: "/app/reports" });
+    expect(screen.queryByRole("link", { current: "page" })).toBeNull();
+  });
+});
+
+// The hamburger also carries aria-expanded, so identify the account trigger by
+// the one thing only it shows: the signed-in address.
+const accountTrigger = (scope: HTMLElement = document.body) =>
+  within(scope).getByRole("button", { name: /rep@acme\.com/ });
+
+describe("account menu", () => {
+  it("is closed until the trigger is used", () => {
+    renderShell();
+    expect(screen.queryByRole("menu")).toBeNull();
+    fireEvent.click(accountTrigger());
+    expect(screen.getByRole("menu")).toBeTruthy();
+  });
+
+  it("lists the portal's items, absolutely resolved, with no Admin for a normal member", () => {
+    renderShell();
+    fireEvent.click(accountTrigger());
+    const items = screen.getAllByRole("menuitem");
+    expect(items.map((el) => el.textContent)).toEqual([
+      "Account settings",
+      "Team & Access",
+      "Manage products",
+      "Sign out",
+    ]);
+    // A product app is on its own origin — a relative href would 404 there.
+    expect(items[0]!.getAttribute("href")).toBe("https://app.revheat.com/account");
+    expect(items[2]!.getAttribute("href")).toBe("https://app.revheat.com/");
+  });
+
+  it("adds Admin for staff", () => {
+    renderShell({ identity: { ...member, isStaff: true }, adminHref: "https://app.revheat.com/admin/orgs" });
+    fireEvent.click(accountTrigger());
+    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Admin" })).toBeTruthy();
+  });
+
+  it("treats an internal org as staff when the app does not send the staff flag", () => {
+    renderShell({ identity: { ...member, isInternal: true }, adminHref: "/admin/orgs" });
+    fireEvent.click(accountTrigger());
+    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Admin" })).toBeTruthy();
+  });
+
+  it("hides Admin from staff until the app says where Admin lives", () => {
+    // Same gate as the header link. Defaulting the href would have switched
+    // Admin on for every RevHeat-org member in every app that bumps this
+    // package, with no code change on their side.
+    renderShell({ identity: { ...member, isStaff: true } });
+    fireEvent.click(accountTrigger());
+    expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "Admin" })).toBeNull();
+  });
+
+  it("signs out through the portal by default, because a product app cannot clear the portal cookie", () => {
+    renderShell();
+    fireEvent.click(accountTrigger());
+    const signOut = screen.getByRole("menuitem", { name: "Sign out" });
+    expect(signOut.tagName).toBe("A");
+    // The whole href, not a prefix: an empty or wrong `next` sends the user to
+    // portal home after sign-out instead of back to the app they were in.
+    expect(signOut.getAttribute("href")).toBe(
+      `https://app.revheat.com/logout?next=${encodeURIComponent(window.location.origin)}`,
+    );
+  });
+
+  it("takes Tab out of the menu deliberately, rather than letting focus fall to the page", () => {
+    // Tab's default target is the NEXT menu item, which the same keystroke
+    // unmounts — focus would land on <body> and the next Tab would restart from
+    // the top of the document.
+    renderShell();
+    const trigger = accountTrigger();
+    fireEvent.click(trigger);
+    const first = screen.getAllByRole("menuitem")[0]!;
+    expect(document.activeElement).toBe(first);
+    const evt = fireEvent.keyDown(screen.getByRole("menu"), { key: "Tab", cancelable: true });
+    expect(evt).toBe(false); // preventDefault was called
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("keeps menu items out of the tab order, per the ARIA menu pattern", () => {
+    renderShell();
+    fireEvent.click(accountTrigger());
+    for (const item of screen.getAllByRole("menuitem")) {
+      expect(item.getAttribute("tabindex")).toBe("-1");
+    }
+  });
+
+  it("uses the app's own handler when one is supplied", () => {
+    let called = 0;
+    renderShell({ onSignOut: () => (called += 1) });
+    fireEvent.click(accountTrigger());
+    fireEvent.click(screen.getByRole("menuitem", { name: "Sign out" }));
+    expect(called).toBe(1);
+  });
+
+  it("moves focus with the arrow keys inside the menu", () => {
+    renderShell();
+    fireEvent.click(accountTrigger());
+    const items = screen.getAllByRole("menuitem");
+    expect(document.activeElement).toBe(items[0]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "ArrowDown" });
+    expect(document.activeElement).toBe(items[1]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "End" });
+    expect(document.activeElement).toBe(items[items.length - 1]);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Home" });
+    expect(document.activeElement).toBe(items[0]);
+  });
+
+  it("closes on Escape and puts focus back on the trigger", () => {
+    renderShell();
+    const trigger = accountTrigger();
+    fireEvent.click(trigger);
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe("drawer", () => {
+  const menuButton = () => screen.getByRole("button", { name: "Open product menu" });
+  const closeButton = () => screen.getByRole("button", { name: "Close product menu" });
+
+  // Everything here runs on a phone-width viewport, because that is the only
+  // width at which the drawer is reachable in production. At 1024px the wide
+  // rail is ALSO mounted, and a suite that never narrows quietly tests a
+  // two-rails-at-once DOM that no user ever sees.
+  beforeEach(() => setViewport(true));
+
+  it("replaces the rail rather than duplicating it", () => {
+    renderShell();
+    expect(document.querySelectorAll(".rh-rail")).toHaveLength(0);
+    fireEvent.click(menuButton());
+    // One rail, and it is the drawer.
+    const rails = document.querySelectorAll(".rh-rail");
+    expect(rails).toHaveLength(1);
+    expect(rails[0]!.getAttribute("role")).toBe("dialog");
+    expect(screen.getAllByRole("navigation", { name: "Your products" })).toHaveLength(1);
+  });
+
+  it("opens the rail as a modal dialog and moves focus into it", () => {
+    renderShell();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(menuButton().getAttribute("aria-controls")).toBeNull();
+    fireEvent.click(menuButton());
+    const drawer = screen.getByRole("dialog", { name: "RevHeat products" });
+    expect(drawer.getAttribute("aria-modal")).toBe("true");
+    // aria-controls must name a node that EXISTS — it fails axe otherwise, and
+    // the drawer is unmounted whenever it is closed.
+    expect(menuButton().getAttribute("aria-controls")).toBe(drawer.id);
+    expect(within(drawer).getByRole("link", { name: /Trend Finder/ })).toBeTruthy();
+    expect(document.activeElement).toBe(within(drawer).getByRole("button", { name: "Close product menu" }));
+  });
+
+  it("locks the page behind the scrim and unlocks it again", () => {
+    renderShell();
+    fireEvent.click(menuButton());
+    expect(document.body.style.overflow).toBe("hidden");
+    fireEvent.click(closeButton());
+    // Released the moment closing starts, not one animation later: the panel is
+    // still mounted here and the page must already scroll.
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    expect(document.body.style.overflow).toBe("");
+  });
+
+  it("stops claiming the page is inert once it starts closing", () => {
+    renderShell();
+    fireEvent.click(menuButton());
+    fireEvent.click(closeButton());
+    expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBeNull();
+  });
+
+  it("closes on Escape from anywhere, not only from inside the panel", () => {
+    // Regression: with the handler on the panel, clicking dead space inside it
+    // blurs to <body> and Escape silently stops working.
+    renderShell();
+    fireEvent.click(menuButton());
+    (document.activeElement as HTMLElement)?.blur();
+    expect(document.activeElement).toBe(document.body);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("returns focus to the menu button", () => {
+    renderShell();
+    const button = menuButton();
+    button.focus();
+    fireEvent.click(button);
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("leaves focus alone when the app has already moved it elsewhere", () => {
+    // An SPA route change focuses the new page's heading and THEN the drawer
+    // closes. Yanking focus back to the hamburger from there is worse than
+    // doing nothing.
+    //
+    // Focus the heading BEFORE the close, so the close effect is deciding
+    // against focus that is genuinely not ours. Asserting after the close would
+    // pass no matter what the effect did.
+    const { rerender } = renderShell();
+    fireEvent.click(menuButton());
+    const heading = document.createElement("h1");
+    heading.tabIndex = -1;
+    document.body.appendChild(heading);
+    heading.focus();
+    expect(document.activeElement).toBe(heading);
+    rerender(
+      <AppShell identity={member} products={products} activePath="/app/reports">
+        <main>content</main>
+      </AppShell>,
+    );
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(heading);
+    heading.remove();
+  });
+
+  it("lets Escape close the account menu without also closing the drawer", () => {
+    renderShell();
+    fireEvent.click(menuButton());
+    const drawer = screen.getByRole("dialog");
+    fireEvent.click(accountTrigger(drawer));
+    fireEvent.keyDown(within(drawer).getByRole("menu"), { key: "Escape" });
+    expect(screen.queryByRole("menu")).toBeNull();
+    // Still open — one Escape, one layer. The portal closes both.
+    //
+    // Assert on aria-expanded, NOT on the dialog still being in the DOM: the
+    // panel lingers for one exit animation after close, so a presence check
+    // passes even when the Escape wrongly closed the drawer too.
+    expect(menuButton().getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("dialog")).toBeTruthy();
+  });
+
+  it("keeps Tab inside the panel, and skips elements that cannot take focus", () => {
+    // The custom account block carries a disabled button. A trap that hands
+    // focus to it silently does nothing, and the user's Tab key appears to
+    // stop working — so it must not be part of the cycle.
+    // The disabled button goes LAST on purpose: if the trap counted it, the
+    // link before it would no longer be the wrap point and Tab from there
+    // would do nothing at all.
+    renderShell({
+      accountMenu: (
+        <>
+          <a href="https://app.revheat.com/account">Account</a>
+          <button type="button" disabled>
+            Request access
+          </button>
+        </>
+      ),
+    });
+    fireEvent.click(menuButton());
+    const drawer = screen.getByRole("dialog");
+    const last = within(drawer).getByRole("link", { name: "Account" });
+    last.focus();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(closeButton());
+    fireEvent.keyDown(document, { key: "Tab", shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
+  it("pulls focus back when it has escaped the panel", () => {
+    renderShell();
+    fireEvent.click(menuButton());
+    (document.activeElement as HTMLElement)?.blur();
+    fireEvent.keyDown(document, { key: "Tab" });
+    expect(document.activeElement).toBe(closeButton());
+  });
+
+  it("closes itself when the app navigates", () => {
+    const { rerender } = renderShell();
+    fireEvent.click(menuButton());
+    expect(screen.getByRole("dialog")).toBeTruthy();
+    rerender(
+      <AppShell identity={member} products={products} activePath="/app/reports">
+        <main>content</main>
+      </AppShell>,
+    );
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("drops the drawer instantly when the viewport widens past the breakpoint", () => {
+    // Rotating to landscape brings the wide rail back. Playing the slide-out
+    // animation here would put TWO rails on screen at once for 300ms, and a
+    // scrim over a page that is no longer modal. The drawer is not the wrong
+    // shape at this width, it is the wrong control — so it just goes.
+    renderShell();
+    fireEvent.click(menuButton());
+    act(() => setViewport(false));
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.querySelectorAll(".rh-rail")).toHaveLength(1);
+    expect(document.querySelector("aside.rh-rail")).toBeTruthy();
+  });
+
+  it("still owns Escape when the app's account block contains a menu of its own", () => {
+    // The drawer defers Escape and Tab to the account menu when the keypress is
+    // IN it. Deferring on the mere PRESENCE of a role="menu" would hand the
+    // keyboard to a menu that is not even open — and headless menu libraries
+    // keep theirs mounted and hidden. `accountMenu` is a public prop, so a
+    // consumer can and will put one there.
+    renderShell({
+      accountMenu: (
+        <ul role="menu" hidden>
+          <li role="menuitem">Theirs</li>
+        </ul>
+      ),
+    });
+    fireEvent.click(menuButton());
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  describe("the exit window", () => {
+    beforeEach(() => vi.useFakeTimers());
+
+    const unmountAfterExit = () =>
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+
+    it("still unmounts when a second close lands inside the exit animation", () => {
+      // The freeze bug: a second close() during the exit used to cancel the
+      // unmount timer while leaving the panel mounted forever — page
+      // scroll-locked, every click swallowed by an invisible scrim, no way out
+      // but a reload.
+      //
+      // Dismiss by tapping a product, then navigate: the app's route change
+      // fires close() again a few milliseconds later. This is the reachable
+      // path now that the exiting drawer is pointer-events: none — a second
+      // TAP can no longer reach it, but a second close() still can.
+      const { rerender } = renderShell();
+      fireEvent.click(menuButton());
+      fireEvent.keyDown(document, { key: "Escape" });
+      rerender(
+        <AppShell identity={member} products={products} activePath="/app/reports">
+          <main>content</main>
+        </AppShell>,
+      );
+      unmountAfterExit();
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(document.body.style.overflow).toBe("");
+    });
+
+    it("reopens as a working drawer when tapped again mid-exit", () => {
+      // Reopening has to REMOUNT. The `aria-modal` and scroll-lock effects key
+      // on `closing`, so those two recover on a reused instance — it is FOCUS
+      // that does not, because moving focus in is mount-time work. A reused
+      // panel comes back on screen with nothing focused: a modal the keyboard
+      // cannot reach. The activeElement assertion below is the one that
+      // catches it; verified by removing the key and re-running.
+      renderShell();
+      fireEvent.click(menuButton());
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.click(menuButton());
+      const drawer = screen.getByRole("dialog");
+      expect(drawer.getAttribute("aria-modal")).toBe("true");
+      expect(document.body.style.overflow).toBe("hidden");
+      expect(document.activeElement).toBe(within(drawer).getByRole("button", { name: "Close product menu" }));
+      // And it is still dismissible.
+      fireEvent.keyDown(document, { key: "Escape" });
+      unmountAfterExit();
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("ignores Escape once it is already closing", () => {
+      renderShell();
+      fireEvent.click(menuButton());
+      fireEvent.keyDown(document, { key: "Escape" });
+      fireEvent.keyDown(document, { key: "Escape" });
+      // Not reopened, not restarted, and gone on the ORIGINAL schedule — a
+      // second Escape that re-armed the timer would still be showing here.
+      expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+
+    it("takes the exiting panel out of the tab order", () => {
+      // `pointer-events: none` handles the mouse. Without this, a Tab pressed
+      // inside the exit window lands back in the panel the user just dismissed,
+      // and then on <body> when it unmounts.
+      renderShell();
+      fireEvent.click(menuButton());
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.getByRole("dialog").hasAttribute("inert")).toBe(true);
+    });
+  });
+});
+
+describe("footer", () => {
+  // Honest limitation: this cannot fail in 2026, because the hardcoded value it
+  // replaced WAS 2026. It is a dated tripwire — it starts catching a re-hardcoded
+  // year on 1 Jan 2027, which is exactly when the old copyright line went stale.
+  it("shows the current year rather than a year baked in at build time", () => {
+    renderShell();
+    expect(screen.getByText(`© ${new Date().getFullYear()} RevHeat`)).toBeTruthy();
+  });
+});

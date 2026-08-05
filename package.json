@@ -1,6 +1,6 @@
 {
   "name": "@revheat/ui",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "type": "module",
   "sideEffects": ["*.css"],
   "//scripts": "Named 'compile' NOT 'build' on purpose: pacote treats a 'build' (or prepare/install/prepack) script as a trigger to run `npm install` inside the git-dep clone, which pulls this package's devDeps and crashes arborist. dist/ is committed, so consumers never build. After editing src/, run `npm run compile` and commit dist/.",
@@ -18,9 +18,12 @@
   "scripts": {
     "compile": "tsc -p tsconfig.build.json && cp src/styles.css dist/styles.css",
     "test": "vitest run",
-    "check:dist": "[ -z \"$(git status --porcelain -- dist)\" ] || { echo 'dist/ is stale or has untracked files. Run: npm run compile, then commit dist/'; exit 1; }",
-    "verify": "npm run compile && npm test && npm run check:dist"
+    "check:dist": "[ -z \"$(git status --porcelain -- dist)\" ] || { echo 'dist/ is stale, staged-but-uncommitted, or has untracked files. Run: npm run compile, then COMMIT dist/'; exit 1; }",
+    "check:client": "[ \"$(head -1 dist/react.js)\" = '\"use client\";' ] || { echo 'dist/react.js lost its \"use client\" directive — both Next.js consumers fail to build without it'; exit 1; }",
+    "verify": "npm run compile && npm test && npm run check:client && npm run check:dist"
   },
+  "//check:client": "AppShell uses hooks (useState/useEffect/useId) and createPortal, and both React consumers mount it from an async Server Component. Without the directive on line 1 of dist/react.js their build fails outright with 'useState only works in a Client Component'. It was decorative through v1.3.0, when AppShell was hook-free; from v1.4.0 it is load-bearing, so it gets a gate.",
+  "//peerDependencies": "react-dom is optional on purpose even though ./react imports createPortal from it. The Vue consumers (Call Analyzer) import only ./icons and ./catalog, so their bundler never resolves react-dom and marking it required would only produce a peer warning on an install that is completely fine. Any app importing ./react is a React DOM app and already has it.",
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18"
@@ -32,6 +35,7 @@
   "devDependencies": {
     "@testing-library/react": "^16.1.0",
     "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.7",
     "happy-dom": "^15.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
