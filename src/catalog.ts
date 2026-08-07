@@ -17,6 +17,20 @@ export type ProductDef = {
 };
 
 // Source of truth for the sidebar product list across every RevHeat portal app.
+//
+// ⛔ THIS REPO IS PUBLIC, AND ITS HISTORY IS PERMANENT. Anything added here is
+// readable by anyone, forever — deleting it later does not un-publish it.
+// So: do NOT add a product that has not been announced. No pre-launch names, no
+// pre-launch descriptions, no `unlaunched: true` entry for something the market
+// has not seen, and no new `consultingOnly` engagement. Those arrive here on the
+// day they go public, not before.
+// Decided 2026-08-07: making this repo private was considered and REJECTED —
+// ~8 build surfaces (incl. the Lead Accelerator / ICP Builder / Website
+// Readiness production deploys) fetch it over git+ssh with no credential, so a
+// flip breaks deploys, and it would not un-publish the existing history anyway.
+// This comment is the control that replaced it. `sell_playbook_consulting`
+// below predates the rule and is grandfathered — it is not a precedent.
+//
 // ⚠️ slug MUST equal code.replace(/_/g,"-") — billing.service builds Stripe's
 // success_url as /products/${code.replace(/_/g,"-")}/upgrade; a divergent slug
 // 404s a paying customer. Enforced by the API repo parity spec (Task 8).
