@@ -2,6 +2,7 @@ import { defineComponent, h, ref, watch, onMounted, onBeforeUnmount, nextTick, g
 import { PRODUCT_CATALOG } from "./catalog.js";
 import { buildRailModel, withSource, isActiveProduct, PORTAL_ORIGIN, ALL_PRODUCTS_HREF, productTitle, resolveActiveScreen, } from "./core.js";
 import { iconPathsFor } from "./icons.js";
+import { isModifiedClick, isSameOriginHref } from "./internal.js";
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue), the
 // `@media (max-width: 900px)` rule in styles.css, and `src/react.tsx`'s
 // NARROW_QUERY. A raw px query on purpose — this package has no Tailwind.
@@ -508,13 +509,16 @@ export const AppShell = defineComponent({
         /** Horizontal in-product screen menu. Rendered only when 2+ items. */
         screens: { type: Array, default: undefined },
     },
-    emits: ["sign-out"],
+    emits: ["sign-out", "navigate"],
     setup(props, { emit, slots }) {
         // Declared emits are stripped from `attrs`, so the only way to ask "does
         // the consumer actually listen for sign-out" is the component's own
         // vnode props at render time.
         const instance = getCurrentInstance();
         const hasSignOut = () => Boolean(instance?.vnode.props?.["onSignOut"]);
+        // Same trick for `navigate`: only intercept screen-tab clicks when the
+        // app actually listens (`@navigate`); otherwise tabs stay plain links.
+        const hasNavigate = () => Boolean(instance?.vnode.props?.["onNavigate"]);
         const isNarrow = ref(false);
         let mq = null;
         let mqHandler = null;
@@ -684,6 +688,14 @@ export const AppShell = defineComponent({
                             href: s.href,
                             "aria-current": s.active ? "page" : undefined,
                             rel: s.external ? "noopener noreferrer" : undefined,
+                            onClick: hasNavigate() && !s.external && isSameOriginHref(s.href)
+                                ? (e) => {
+                                    if (isModifiedClick(e))
+                                        return;
+                                    e.preventDefault();
+                                    emit("navigate", s.href);
+                                }
+                                : undefined,
                         }, s.label)))
                         : null,
                     slots.default ? slots.default() : null,

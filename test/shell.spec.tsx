@@ -29,8 +29,14 @@ beforeEach(() => {
     },
   })) as unknown as typeof window.matchMedia;
 });
+// happy-dom really follows an un-prevented anchor click (the off-origin
+// "Portal"/"Docs" links in the navigate tests), which moves the shared
+// document's URL — and with it the origin every later same-origin check
+// compares against. Put it back after every test.
+const INITIAL_HREF = window.location.href;
 afterEach(() => {
   vi.useRealTimers();
+  if (window.location.href !== INITIAL_HREF) window.location.href = INITIAL_HREF;
 });
 
 const products = [
@@ -628,6 +634,82 @@ describe("navigation model (v2)", () => {
 
     renderShell();
     expect(document.querySelector(".rh-menu")).toBeNull();
+  });
+
+  it("6b: onNavigate intercepts plain clicks on internal tabs only, and never modified clicks", () => {
+    const onNavigate = vi.fn();
+    const screens = [
+      ...screens2,
+      { label: "Docs", href: "https://docs.revheat.com", external: true },
+    ];
+    renderShell({ screens, activePath: "/app", onNavigate });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+
+    // Plain left-click on an internal tab: intercepted, router gets the href.
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(plain);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith("/app/reports");
+    expect(plain.defaultPrevented).toBe(true);
+
+    // Every "open elsewhere" gesture is left to the browser: ⌘ (mac new tab),
+    // ctrl (Windows/Linux new tab), shift (new window), alt (download /
+    // reading list), and a non-primary button.
+    for (const mod of [
+      { metaKey: true },
+      { ctrlKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]) {
+      const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...mod });
+      within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(ev);
+      expect(onNavigate, JSON.stringify(mod)).toHaveBeenCalledTimes(1);
+      expect(ev.defaultPrevented, JSON.stringify(mod)).toBe(false);
+    }
+
+    // External tabs are never intercepted.
+    const ext = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Docs" }).dispatchEvent(ext);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(ext.defaultPrevented).toBe(false);
+  });
+
+  it("6d: an off-origin href that forgot external:true is still left to the browser", () => {
+    const onNavigate = vi.fn();
+    // Captured up front: happy-dom really navigates on an un-prevented anchor
+    // click, so the page's origin changes once the Portal link is clicked.
+    const here = `${window.location.origin}/app/here`;
+    renderShell({
+      screens: [
+        ...screens2,
+        { label: "Portal", href: "https://app.revheat.com/account" },
+        { label: "Here", href: here },
+      ],
+      activePath: "/app",
+      onNavigate,
+    });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+    // A same-origin ABSOLUTE href is routed like a relative one…
+    const same = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Here" }).dispatchEvent(same);
+    expect(onNavigate).toHaveBeenCalledWith(here);
+    expect(same.defaultPrevented).toBe(true);
+    // …while the off-origin one is not intercepted. Clicked last: the browser
+    // follows it, and the page's origin is app.revheat.com from here on.
+    onNavigate.mockClear();
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Portal" }).dispatchEvent(ev);
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  it("6c: without onNavigate, screen tabs are plain links (default not prevented)", () => {
+    renderShell({ screens: screens2, activePath: "/app" });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
   });
 
   it("7: renders headerActions inside .rh-banner__actions, and omits the wrapper when absent", () => {
