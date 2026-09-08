@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { PRODUCT_CATALOG } from "../src/catalog";
-import { buildRailModel, withSource, upgradeHref, isActiveProduct } from "../src/core";
+import {
+  buildRailModel,
+  withSource,
+  upgradeHref,
+  isActiveProduct,
+  resolveActiveScreen,
+  productTitle,
+  ALL_PRODUCTS_HREF,
+  type ShellScreen,
+} from "../src/core";
 
 const me = {
   viewerRole: "admin" as const,
@@ -104,5 +113,127 @@ describe("buildRailModel (per-org sidebar switch)", () => {
   it("treats an absent flag as shown", () => {
     const plain = buildRailModel({ me, degraded: false, productCodesFallback: [], catalog: PRODUCT_CATALOG });
     expect(plain.entitled.map((p) => p.code)).toEqual(["call_analyzer"]);
+  });
+});
+
+describe("resolveActiveScreen", () => {
+  const screens: ShellScreen[] = [
+    { label: "Overview", href: "/app" },
+    { label: "Reports", href: "/app/reports" },
+  ];
+
+  it("10a: longest matching prefix wins", () => {
+    const result = resolveActiveScreen(screens, "/app/reports/42");
+    expect(result.find((s) => s.label === "Reports")!.active).toBe(true);
+    expect(result.find((s) => s.label === "Overview")!.active).toBe(false);
+  });
+
+  it("10b: an exact match on the shorter path wins when the longer one is not a prefix", () => {
+    const result = resolveActiveScreen(screens, "/app");
+    expect(result.find((s) => s.label === "Overview")!.active).toBe(true);
+    expect(result.find((s) => s.label === "Reports")!.active).toBe(false);
+  });
+
+  it("10c: segment-boundary rule — /appendix does not match /app", () => {
+    const result = resolveActiveScreen(screens, "/appendix");
+    expect(result.every((s) => s.active === false)).toBe(true);
+  });
+
+  it("10d: an explicit active wins over derivation, for the whole array", () => {
+    const explicit: ShellScreen[] = [
+      { label: "Reports", href: "/app/reports" },
+      { label: "Overview", href: "/app", active: true },
+    ];
+    const result = resolveActiveScreen(explicit, "/app/reports");
+    expect(result.find((s) => s.label === "Overview")!.active).toBe(true);
+    expect(result.find((s) => s.label === "Reports")!.active).toBe(false);
+  });
+
+  it("10e: external items are never derived active", () => {
+    const withExternal: ShellScreen[] = [
+      { label: "Docs", href: "https://docs.revheat.com/x", external: true },
+      { label: "Home", href: "/app" },
+    ];
+    const result = resolveActiveScreen(withExternal, "/app");
+    expect(result.find((s) => s.label === "Docs")!.active).toBe(false);
+    expect(result.find((s) => s.label === "Home")!.active).toBe(true);
+  });
+
+  it("10f: absolute hrefs are compared on pathname only", () => {
+    const absolute: ShellScreen[] = [
+      { label: "Overview", href: "/app" },
+      { label: "Reports", href: "https://trends.revheat.com/app/reports" },
+    ];
+    const result = resolveActiveScreen(absolute, "/app/reports");
+    expect(result.find((s) => s.label === "Reports")!.active).toBe(true);
+    expect(result.find((s) => s.label === "Overview")!.active).toBe(false);
+  });
+
+  it("10i: a trailing slash on href does not defeat the match", () => {
+    const trailing: ShellScreen[] = [{ label: "Overview", href: "/app/" }];
+    const result = resolveActiveScreen(trailing, "/app");
+    expect(result.find((s) => s.label === "Overview")!.active).toBe(true);
+  });
+
+  it("10j: activePath keeps matching with a query string or a hash", () => {
+    const withQuery = resolveActiveScreen(screens, "/app/reports?tab=1");
+    expect(withQuery.find((s) => s.label === "Reports")!.active).toBe(true);
+    const withHash = resolveActiveScreen(screens, "/app#top");
+    expect(withHash.find((s) => s.label === "Overview")!.active).toBe(true);
+  });
+
+  it("10k: does not mutate the input array or its items", () => {
+    const input: ShellScreen[] = [{ label: "Overview", href: "/app" }];
+    const snapshot = JSON.parse(JSON.stringify(input));
+    resolveActiveScreen(input, "/app");
+    expect(input).toEqual(snapshot);
+  });
+
+  it("10l: duplicate hrefs — the first wins the tie", () => {
+    const dupes: ShellScreen[] = [
+      { label: "First", href: "/app" },
+      { label: "Second", href: "/app" },
+    ];
+    const result = resolveActiveScreen(dupes, "/app");
+    expect(result.find((s) => s.label === "First")!.active).toBe(true);
+    expect(result.find((s) => s.label === "Second")!.active).toBe(false);
+    // Same tie after trailing-slash normalisation: "/app" and "/app/" are
+    // the same path, so the earlier item still wins regardless of the slash.
+    const slashDupes: ShellScreen[] = [
+      { label: "Overview", href: "/app" },
+      { label: "Home", href: "/app/" },
+    ];
+    const r2 = resolveActiveScreen(slashDupes, "/app");
+    expect(r2.map((s) => s.active)).toEqual([true, false]);
+    const r3 = resolveActiveScreen([...slashDupes].reverse(), "/app");
+    expect(r3.map((s) => s.active)).toEqual([true, false]);
+  });
+
+  it("10m: href \"/\" is a catch-all that matches every path", () => {
+    const catchAll: ShellScreen[] = [{ label: "Root", href: "/" }];
+    expect(resolveActiveScreen(catchAll, "/anything/at/all")[0]!.active).toBe(true);
+    expect(resolveActiveScreen(catchAll, "/")[0]!.active).toBe(true);
+
+    const withMoreSpecific: ShellScreen[] = [
+      { label: "Root", href: "/" },
+      { label: "Reports", href: "/app/reports" },
+    ];
+    const result = resolveActiveScreen(withMoreSpecific, "/app/reports");
+    expect(result.find((s) => s.label === "Reports")!.active).toBe(true);
+    expect(result.find((s) => s.label === "Root")!.active).toBe(false);
+  });
+});
+
+describe("productTitle", () => {
+  it("10g: returns the catalog title for a known code, and undefined for unknown/undefined", () => {
+    expect(productTitle("trend_finder", PRODUCT_CATALOG)).toBe("Trend Finder");
+    expect(productTitle("no_such_code", PRODUCT_CATALOG)).toBeUndefined();
+    expect(productTitle(undefined, PRODUCT_CATALOG)).toBeUndefined();
+  });
+});
+
+describe("ALL_PRODUCTS_HREF", () => {
+  it("10h: points at the portal home, tagged as a sidebar referral", () => {
+    expect(ALL_PRODUCTS_HREF).toBe("https://app.revheat.com/?source=sidebar");
   });
 });

@@ -5,11 +5,14 @@ import { PRODUCT_CATALOG } from "./catalog.js";
 import {
   buildRailModel,
   withSource,
-  upgradeHref,
   isActiveProduct,
   PORTAL_ORIGIN,
+  ALL_PRODUCTS_HREF,
+  productTitle,
+  resolveActiveScreen,
   type MeProduct,
   type RailProduct,
+  type ShellScreen,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
 
@@ -82,6 +85,10 @@ export interface AppShellProps {
    */
   currentProductCode?: string;
   adminHref?: string;
+  /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+  screens?: ShellScreen[];
+  /** App-supplied controls, rendered in the banner between the title and Admin. */
+  headerActions?: React.ReactNode;
   /** Replaces the built-in account block entirely. */
   accountMenu?: React.ReactNode;
   /**
@@ -303,51 +310,6 @@ function EntitledRow({
         </span>
         <span className="rh-rail__label">{p.title}</span>
       </a>
-    </li>
-  );
-}
-
-function UpsellRow({ p, canBuy }: { p: RailProduct; canBuy: boolean }) {
-  if (p.unlaunched) {
-    return (
-      <li className="rh-rail__item rh-rail__item--upsell rh-rail__item--soon">
-        <span className="rh-rail__link rh-rail__link--muted">
-          <span className="rh-rail__tile" aria-hidden>
-            <ProductIcon code={p.code} />
-          </span>
-          <span className="rh-rail__col">
-            <span className="rh-rail__label">{p.title}</span>
-            <span className="rh-rail__soon">Coming soon</span>
-          </span>
-        </span>
-      </li>
-    );
-  }
-  const isRenew = p.state === "locked_billing";
-  const href = canBuy ? upgradeHref(p.slug, isRenew ? "renew" : "sidebar") : undefined;
-  const cta = isRenew ? "Reactivate →" : "See plans →";
-  return (
-    <li className="rh-rail__item rh-rail__item--upsell">
-      {href ? (
-        <a className="rh-rail__link" href={href}>
-          <span className="rh-rail__tile" aria-hidden>
-            <ProductIcon code={p.code} />
-          </span>
-          <span className="rh-rail__col">
-            <span className="rh-rail__label">{p.title}</span>
-            <span className="rh-rail__go">{cta}</span>
-          </span>
-        </a>
-      ) : (
-        <span className="rh-rail__link rh-rail__link--muted">
-          <span className="rh-rail__tile" aria-hidden>
-            <ProductIcon code={p.code} />
-          </span>
-          <span className="rh-rail__col">
-            <span className="rh-rail__label">{p.title}</span>
-          </span>
-        </span>
-      )}
     </li>
   );
 }
@@ -721,6 +683,8 @@ export function AppShell({
   activePath,
   currentProductCode,
   adminHref,
+  screens,
+  headerActions,
   accountMenu,
   onSignOut,
   children,
@@ -744,6 +708,8 @@ export function AppShell({
   }, [isNarrow, dismissDrawer]);
 
   const isStaff = identity.isStaff ?? identity.isInternal;
+  const title = productTitle(currentProductCode, PRODUCT_CATALOG);
+  const menuItems = screens && screens.length >= 2 ? resolveActiveScreen(screens, activePath) : null;
 
   const model = buildRailModel({
     me: degraded
@@ -755,6 +721,10 @@ export function AppShell({
           // app starts sending a real `viewerRole`, an omitted `isPrimaryBuyer`
           // is a gap in its adoption, not a request for the old guess — and
           // guessing `true` there hands checkout to a rep the portal refuses.
+          // `canBuy` (derived below from viewerRole/isPrimaryBuyer) is retained
+          // on the model for API stability but renders nothing in v2 — the
+          // upsell nav that read it is gone. It is exercised in core.spec.ts,
+          // not in this file's DOM tests.
           isPrimaryBuyer: isPrimaryBuyer ?? viewerRole === undefined,
           products,
         },
@@ -785,16 +755,9 @@ export function AppShell({
         </nav>
       )}
 
-      {model.upsell.length > 0 && (
-        <nav className="rh-rail__section" aria-label="Available">
-          <p className="rh-rail__heading">Available</p>
-          <ul>
-            {model.upsell.map((p) => (
-              <UpsellRow key={p.code} p={p} canBuy={model.canBuy} />
-            ))}
-          </ul>
-        </nav>
-      )}
+      <a className="rh-row rh-row--all" href={ALL_PRODUCTS_HREF}>
+        All products →
+      </a>
 
       <div className="rh-rail__account">
         {accountMenu ?? (
@@ -839,28 +802,52 @@ export function AppShell({
 
       <div className="rh-shell__main">
         <header className="rh-banner">
-          <button
-            type="button"
-            className="rh-banner__menu"
-            aria-label="Open product menu"
-            // Only while the drawer exists — `aria-controls` pointing at an id
-            // that is not in the document fails axe `aria-valid-attr-value`,
-            // and the drawer is unmounted whenever it is closed.
-            aria-controls={drawer.isMounted ? drawerId : undefined}
-            aria-expanded={drawer.isOpen}
-            onClick={drawer.open}
-          >
-            <StrokeIcon className="rh-banner__menu-glyph" d={MENU_ICON} />
-          </button>
-          <a className="rh-banner__brand" href={`${PORTAL_ORIGIN}/`} aria-label="RevHeat home">
-            <BrandWordmark />
-          </a>
+          <div className="rh-banner__lead">
+            <button
+              type="button"
+              className="rh-banner__menu"
+              aria-label="Open product menu"
+              // Only while the drawer exists — `aria-controls` pointing at an id
+              // that is not in the document fails axe `aria-valid-attr-value`,
+              // and the drawer is unmounted whenever it is closed.
+              aria-controls={drawer.isMounted ? drawerId : undefined}
+              aria-expanded={drawer.isOpen}
+              onClick={drawer.open}
+            >
+              <StrokeIcon className="rh-banner__menu-glyph" d={MENU_ICON} />
+            </button>
+            <a className="rh-banner__portal" href={ALL_PRODUCTS_HREF}>
+              <span aria-hidden>←</span> Portal
+            </a>
+            <a className="rh-banner__brand" href={`${PORTAL_ORIGIN}/`} aria-label="RevHeat home">
+              <BrandWordmark />
+            </a>
+            {title !== undefined && <span className="rh-banner__product">{title}</span>}
+          </div>
+          {headerActions == null ? null : (
+            <div className="rh-banner__actions">{headerActions}</div>
+          )}
           {isStaff && adminHref && (
             <a className="rh-banner__admin" href={adminHref}>
               Admin
             </a>
           )}
         </header>
+        {menuItems && (
+          <nav className="rh-menu" aria-label="Screens">
+            {menuItems.map((s) => (
+              <a
+                key={s.href}
+                className="rh-menu__tab"
+                href={s.href}
+                aria-current={s.active ? "page" : undefined}
+                rel={s.external ? "noopener noreferrer" : undefined}
+              >
+                {s.label}
+              </a>
+            ))}
+          </nav>
+        )}
         {children}
         <footer className="rh-footer">
           <span>© {new Date().getFullYear()} RevHeat</span>

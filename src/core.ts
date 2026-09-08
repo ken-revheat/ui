@@ -130,3 +130,93 @@ export const PORTAL_ORIGIN = "https://app.revheat.com";
 export function upgradeHref(slug: string, source: "sidebar" | "renew"): string {
   return `${PORTAL_ORIGIN}/products/${slug}/upgrade?source=${source}`;
 }
+
+/**
+ * One item in the horizontal in-product screen menu (`.rh-menu`). The rail
+ * switches PRODUCT; this switches SCREEN within a product — see the shell v2
+ * nav-model design doc. `active` is optional: pass it to force a tab active,
+ * or omit it everywhere and let `resolveActiveScreen` derive it from the path.
+ */
+export interface ShellScreen {
+  label: string;
+  href: string;
+  active?: boolean;
+  external?: boolean;
+}
+
+/**
+ * Fills in `active` on every item. Two modes:
+ *
+ * 1. **Explicit wins, for the whole array.** If ANY item carries `active`,
+ *    each item's `active` becomes exactly its own `active === true` (so
+ *    undefined/false → false, and only explicitly-true items light up) and
+ *    no derivation happens at all — a caller that knows better is trusted
+ *    completely, not blended with a guess.
+ * 2. **Otherwise, longest-prefix-of-path wins.** `activePath` is normalised by
+ *    stripping its query and hash. Each non-external item's `href` is reduced
+ *    to a pathname (resolved against a throwaway base so a relative href still
+ *    works); it is a candidate when `activePath` equals that pathname or
+ *    starts with it at a "/" boundary (so `/app` matches `/app/reports` but
+ *    NOT `/appendix`). The candidate with the longest pathname wins; ties keep
+ *    the earliest array index. `external: true` items are never candidates.
+ *
+ * Pure — never mutates `screens` or its items.
+ */
+export function resolveActiveScreen(screens: ShellScreen[], activePath: string): ShellScreen[] {
+  const hasExplicit = screens.some((s) => s.active !== undefined);
+  if (hasExplicit) {
+    return screens.map((s) => ({ ...s, active: s.active === true }));
+  }
+
+  const path = activePath.split("?")[0]!.split("#")[0]!;
+  const pathOf = (href: string): string => {
+    try {
+      return new URL(href, "https://rh.invalid").pathname;
+    } catch {
+      return href;
+    }
+  };
+
+  let winner: ShellScreen | undefined;
+  let winnerLength = -1;
+  for (const s of screens) {
+    if (s.external === true) continue;
+    const p = pathOf(s.href);
+    // A trailing slash on `href` (e.g. "/app/") must not defeat the match
+    // against an `activePath` of "/app" — normalize it away before
+    // comparing. `href: "/"` stays a catch-all: it is left as "/" (not
+    // stripped to ""), so it is handled as its own case below rather than
+    // producing an empty-string prefix.
+    const norm = p.length > 1 && p.endsWith("/") ? p.slice(0, -1) : p;
+    const matches = norm === "/" ? true : path === norm || path.startsWith(`${norm}/`);
+    if (matches && norm.length > winnerLength) {
+      winner = s;
+      winnerLength = norm.length;
+    }
+  }
+
+  return screens.map((s) => ({ ...s, active: s === winner }));
+}
+
+/**
+ * Portal home, tagged as a sidebar referral. The rail's trailing "All
+ * products →" row and the banner's "← Portal" link both point here.
+ *
+ * Declared at the END of the file, after `withSource` and `PORTAL_ORIGIN`:
+ * module-scope `const` initialisers run top-to-bottom, so declaring this
+ * before either of them would evaluate to "undefined/?source=sidebar" with no
+ * error.
+ */
+export const ALL_PRODUCTS_HREF = withSource(`${PORTAL_ORIGIN}/`);
+
+/**
+ * The catalog title for a product code, or `undefined` — never a fabricated
+ * name. `undefined` for `code === undefined`, `""`, or any code the catalog
+ * does not have. `catalog` is taken explicitly (rather than importing
+ * PRODUCT_CATALOG here) so this file keeps its type-only import of
+ * `catalog.js` and gains no runtime dependency on it.
+ */
+export function productTitle(code: string | undefined, catalog: ProductDef[]): string | undefined {
+  if (code === undefined) return undefined;
+  return catalog.find((p) => p.code === code)?.title;
+}

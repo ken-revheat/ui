@@ -24,6 +24,101 @@ in that consumer's environment).
   render the SAME glyphs as the React shell. Draw them at `currentColor` with
   `fill-rule="evenodd"` (the ring glyphs are outlines, not solids).
 - `@revheat/ui/react` — React `<AppShell>`.
+- `@revheat/ui/vue` — Vue 3 `AppShell`, written as `defineComponent` + `h()`
+  (no SFC, no template compiler needed). Same DOM, same classes, same
+  `styles.css` as the React shell. Requires `vue >= 3.4` — an optional peer.
+
+## The v2 navigation model
+
+The rail switches **product**; the screen menu switches **screen** within a
+product. The rail only ever shows products the viewer is entitled to and the
+org has not hidden (`state === "launch"`, not `sidebarHidden`) — there is no
+"Available"/buy section in the rail itself. Buy and coming-soon products live
+on the portal home, reached from the rail's trailing **All products →** row.
+
+`buildRailModel().upsell` and `.canBuy` are still computed (for API
+stability and for anything that reads the model directly) but neither
+`AppShell` renders anything from them.
+
+## `screens`
+
+`screens` is the shell's horizontal in-product screen menu (`.rh-menu`),
+rendered only when 2 or more items are passed:
+
+```ts
+interface ShellScreen {
+  label: string;
+  href: string;
+  active?: boolean;   // omit and let the shell derive it
+  external?: boolean; // never a derivation candidate
+}
+```
+
+Each item's `active` is filled in by `resolveActiveScreen`:
+
+- **If any item in the array sets `active` explicitly, that wins for the
+  whole array** — each item's `active` becomes exactly its own
+  `active === true` (every other item is `false`), and nothing is derived.
+- **Otherwise**, the item whose `href` is the longest prefix of `activePath`
+  (matched at a `/` boundary, so `/app` matches `/app/reports` but not
+  `/appendix`) is marked active. `external: true` items are never
+  candidates for this derivation.
+
+## `headerActions` / `#header-actions`
+
+App-supplied controls, rendered in the banner between the product title and
+the Admin link.
+
+React:
+
+```tsx
+<AppShell headerActions={<button onClick={onExport}>Export</button>} …>
+```
+
+Vue:
+
+```html
+<AppShell …>
+  <template #header-actions>
+    <button @click="onExport">Export</button>
+  </template>
+</AppShell>
+```
+
+## Vue usage
+
+```ts
+import { AppShell } from "@revheat/ui/vue";
+```
+
+```html
+<AppShell
+  :identity="identity"
+  :products="products"
+  active-path="/app"
+  @sign-out="onSignOut"
+>
+  <template #header-actions>…</template>
+  <template #account-menu>…</template>
+  <router-view />
+</AppShell>
+```
+
+- `@sign-out` mirrors React's `onSignOut` — omit it and the shell links to
+  the portal's logout instead.
+- Three slots: the default slot (the app's own content), `#header-actions`,
+  and `#account-menu` (replaces the built-in account block entirely).
+- The shell fetches nothing itself. The app is responsible for calling
+  `GET /api/me/products` and passing the result in via `products` (and
+  `viewerRole`/`isPrimaryBuyer`, `degraded`, `productCodesFallback` as
+  needed).
+
+## Breaking change in v2.0.0
+
+The upsell/"Available" section and its buy / coming-soon rows are gone from
+the rendered rail in both `AppShell`s — see "The v2 navigation model" above.
+`buildRailModel().upsell` and `.canBuy` are unchanged and still exported from
+`@revheat/ui/core` for consumers that read the model directly.
 
 ## Scripts
 
