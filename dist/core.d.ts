@@ -8,6 +8,14 @@ export interface MeProduct {
     billingStatus: string | null;
     grantedBy?: string | null;
     isBundle?: boolean;
+    /**
+     * Per-org sidebar switch (admin-set in the portal; served by
+     * /api/me/products). True = hide this row from the rail. VISIBILITY ONLY:
+     * `state` is untouched, so entitlement gates must never read this field.
+     * The API only ever sets it on products the org OWNS — hidden products it
+     * does not own are dropped from the response entirely.
+     */
+    sidebarHidden?: boolean;
 }
 export interface MeProductsResponse {
     viewerRole: "rep" | "manager" | "admin";
@@ -19,6 +27,8 @@ export interface RailProduct extends ProductDef {
     state: ProductState;
     lockReason: string | null;
     billingStatus: string | null;
+    /** Per-org sidebar switch — see MeProduct.sidebarHidden. */
+    sidebarHidden?: boolean;
 }
 export interface RailModel {
     entitled: RailProduct[];

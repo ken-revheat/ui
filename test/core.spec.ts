@@ -83,3 +83,26 @@ describe("helpers", () => {
     expect(isActiveProduct(vault, "/vault/module-3")).toBe(true);
   });
 });
+
+describe("buildRailModel (per-org sidebar switch)", () => {
+  const hiddenMe = {
+    ...me,
+    products: [
+      { ...me.products[0], sidebarHidden: true },
+      me.products[1],
+      { ...me.products[2], sidebarHidden: true },
+      { code: "trend_finder", state: "launch" as const, appUrl: "https://trends.revheat.com/app", lockReason: null, billingStatus: "active", sidebarHidden: false },
+    ],
+  };
+  const m = buildRailModel({ me: hiddenMe, degraded: false, productCodesFallback: [], catalog: PRODUCT_CATALOG });
+  it("drops a hidden owned product from entitled without touching the others", () => {
+    expect(m.entitled.map((p) => p.code)).toEqual(["trend_finder"]);
+  });
+  it("drops a hidden row from upsell too", () => {
+    expect(m.upsell).toEqual([]);
+  });
+  it("treats an absent flag as shown", () => {
+    const plain = buildRailModel({ me, degraded: false, productCodesFallback: [], catalog: PRODUCT_CATALOG });
+    expect(plain.entitled.map((p) => p.code)).toEqual(["call_analyzer"]);
+  });
+});

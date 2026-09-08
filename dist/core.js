@@ -6,7 +6,7 @@ function withCatalog(products, byCode) {
         return cat ? { ...cat, ...mp } : null;
     })
         .filter((p) => p !== null)
-        .filter((p) => !p.isBundle && !p.consultingOnly);
+        .filter((p) => !p.isBundle && !p.consultingOnly && !p.sidebarHidden);
 }
 export function buildRailModel(input) {
     const byCode = new Map(input.catalog.map((p) => [p.code, p]));
