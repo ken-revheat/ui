@@ -64,6 +64,35 @@ Each item's `active` is filled in by `resolveActiveScreen`:
   `/appendix`) is marked active. `external: true` items are never
   candidates for this derivation.
 
+## `onNavigate` / `@navigate` (v2.1.0)
+
+Screen tabs are plain `<a href>` links — the shell never imports a router. A
+single-page app that wants tab clicks to stay in-app passes a navigation hook:
+
+```tsx
+// React
+<AppShell screens={screens} onNavigate={(href) => router.push(href)} … />
+```
+
+```ts
+// Vue (h() render)
+h(AppShell, { screens, onNavigate: (href) => router.push(href), … })
+// or in a template:  <AppShell :screens="screens" @navigate="(href) => router.push(href)" />
+```
+
+With the hook present, a plain left-click on a same-origin, non-`external`
+tab is `preventDefault`-ed and the hook receives `href`. The browser keeps
+every click that should open elsewhere: ⌘/ctrl/shift/alt-modified clicks,
+non-primary buttons, `external: true` tabs, and any href on another origin
+(a portal URL that forgot `external: true` still leaves the app instead of
+hitting the router's 404). Without the hook nothing changes — tabs are plain
+links, exactly as in v2.0.0.
+
+React: `onNavigate` is a function prop, so whatever renders `<AppShell>` with
+it must itself be a Client Component (`"use client"`). Both existing React
+consumers mount the shell from an async Server Component — add a thin client
+wrapper rather than passing the function from there.
+
 ## `headerActions` / `#header-actions`
 
 App-supplied controls, rendered in the banner between the product title and

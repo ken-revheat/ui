@@ -15,6 +15,7 @@ import {
   type ShellScreen,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
+import { isModifiedClick, isSameOriginHref } from "./internal.js";
 
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue) and the existing
 // `@media (max-width: 900px)` rule in styles.css. A raw px query on purpose —
@@ -87,6 +88,20 @@ export interface AppShellProps {
   adminHref?: string;
   /** Horizontal in-product screen menu. Rendered only when 2+ items. */
   screens?: ShellScreen[];
+  /**
+   * Client-side navigation hook for the screen menu. When present, a plain
+   * left-click on a non-external tab is intercepted (`preventDefault`) and
+   * `onNavigate(href)` is called instead of letting the browser load the
+   * page — wire it to your router's push. Modified clicks (⌘/ctrl/shift/alt,
+   * middle button) and `external: true` tabs keep the browser's default so
+   * open-in-new-tab still works, and so does an off-origin href that forgot
+   * `external: true`. Omit it and tabs are plain links.
+   *
+   * This is a function prop: whatever renders `<AppShell onNavigate>` must
+   * itself be a Client Component ("use client") — a Server Component cannot
+   * pass functions across the boundary.
+   */
+  onNavigate?: (href: string) => void;
   /** App-supplied controls, rendered in the banner between the title and Admin. */
   headerActions?: React.ReactNode;
   /** Replaces the built-in account block entirely. */
@@ -684,6 +699,7 @@ export function AppShell({
   currentProductCode,
   adminHref,
   screens,
+  onNavigate,
   headerActions,
   accountMenu,
   onSignOut,
@@ -842,6 +858,15 @@ export function AppShell({
                 href={s.href}
                 aria-current={s.active ? "page" : undefined}
                 rel={s.external ? "noopener noreferrer" : undefined}
+                onClick={
+                  onNavigate && !s.external && isSameOriginHref(s.href)
+                    ? (e) => {
+                        if (isModifiedClick(e)) return;
+                        e.preventDefault();
+                        onNavigate(s.href);
+                      }
+                    : undefined
+                }
               >
                 {s.label}
               </a>

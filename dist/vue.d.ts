@@ -79,7 +79,7 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
     };
 }>, () => VNode<import("vue").RendererNode, import("vue").RendererElement, {
     [key: string]: any;
-}>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, "sign-out"[], "sign-out", import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
+}>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, ("sign-out" | "navigate")[], "sign-out" | "navigate", import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
     identity: {
         type: PropType<AppShellIdentity>;
         required: true;
@@ -128,6 +128,7 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         default: undefined;
     };
 }>> & Readonly<{
+    onNavigate?: ((...args: any[]) => any) | undefined;
     "onSign-out"?: ((...args: any[]) => any) | undefined;
 }>, {
     currentProductCode: string;

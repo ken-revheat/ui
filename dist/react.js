@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { PRODUCT_CATALOG } from "./catalog.js";
 import { buildRailModel, withSource, isActiveProduct, PORTAL_ORIGIN, ALL_PRODUCTS_HREF, productTitle, resolveActiveScreen, } from "./core.js";
 import { iconPathsFor } from "./icons.js";
+import { isModifiedClick, isSameOriginHref } from "./internal.js";
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue) and the existing
 // `@media (max-width: 900px)` rule in styles.css. A raw px query on purpose —
 // this package has no Tailwind, so there is no `md:` screen to inherit.
@@ -381,7 +382,7 @@ function Drawer({ id, closing, onClose, children, }) {
 /* ------------------------------------------------------------------ */
 /* shell                                                               */
 /* ------------------------------------------------------------------ */
-export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded = false, productCodesFallback = [], activePath, currentProductCode, adminHref, screens, headerActions, accountMenu, onSignOut, children, }) {
+export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded = false, productCodesFallback = [], activePath, currentProductCode, adminHref, screens, onNavigate, headerActions, accountMenu, onSignOut, children, }) {
     const isNarrow = useIsNarrow();
     const drawer = useDrawer();
     const drawerId = React.useId();
@@ -427,6 +428,13 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
             // Every open is a fresh Drawer — see `useDrawer`. Without the key,
             // reopening mid-exit reuses the instance and none of its mount work
             // (focus in, scroll lock) happens.
-            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (_jsx("a", { className: "rh-banner__admin", href: adminHref, children: "Admin" }))] }), menuItems && (_jsx("nav", { className: "rh-menu", "aria-label": "Screens", children: menuItems.map((s) => (_jsx("a", { className: "rh-menu__tab", href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, children: s.label }, s.href))) })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
+            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (_jsx("a", { className: "rh-banner__admin", href: adminHref, children: "Admin" }))] }), menuItems && (_jsx("nav", { className: "rh-menu", "aria-label": "Screens", children: menuItems.map((s) => (_jsx("a", { className: "rh-menu__tab", href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, onClick: onNavigate && !s.external && isSameOriginHref(s.href)
+                                ? (e) => {
+                                    if (isModifiedClick(e))
+                                        return;
+                                    e.preventDefault();
+                                    onNavigate(s.href);
+                                }
+                                : undefined, children: s.label }, s.href))) })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
 }
 //# sourceMappingURL=react.js.map

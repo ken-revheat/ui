@@ -630,6 +630,71 @@ describe("navigation model (v2)", () => {
     expect(document.querySelector(".rh-menu")).toBeNull();
   });
 
+  it("6b: onNavigate intercepts plain clicks on internal tabs only, and never modified clicks", () => {
+    const onNavigate = vi.fn();
+    const screens = [
+      ...screens2,
+      { label: "Docs", href: "https://docs.revheat.com", external: true },
+    ];
+    renderShell({ screens, activePath: "/app", onNavigate });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+
+    // Plain left-click on an internal tab: intercepted, router gets the href.
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(plain);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(onNavigate).toHaveBeenCalledWith("/app/reports");
+    expect(plain.defaultPrevented).toBe(true);
+
+    // Every "open elsewhere" gesture is left to the browser: ⌘ (mac new tab),
+    // ctrl (Windows/Linux new tab), shift (new window), alt (download /
+    // reading list), and a non-primary button.
+    for (const mod of [
+      { metaKey: true },
+      { ctrlKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]) {
+      const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...mod });
+      within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(ev);
+      expect(onNavigate, JSON.stringify(mod)).toHaveBeenCalledTimes(1);
+      expect(ev.defaultPrevented, JSON.stringify(mod)).toBe(false);
+    }
+
+    // External tabs are never intercepted.
+    const ext = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Docs" }).dispatchEvent(ext);
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(ext.defaultPrevented).toBe(false);
+  });
+
+  it("6d: an off-origin href that forgot external:true is still left to the browser", () => {
+    const onNavigate = vi.fn();
+    renderShell({
+      screens: [...screens2, { label: "Portal", href: "https://app.revheat.com/account" }],
+      activePath: "/app",
+      onNavigate,
+    });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Portal" }).dispatchEvent(ev);
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(ev.defaultPrevented).toBe(false);
+    // …while a same-origin absolute href is routed like a relative one.
+    const same = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(same);
+    expect(onNavigate).toHaveBeenCalledWith("/app/reports");
+  });
+
+  it("6c: without onNavigate, screen tabs are plain links (default not prevented)", () => {
+    renderShell({ screens: screens2, activePath: "/app" });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+  });
+
   it("7: renders headerActions inside .rh-banner__actions, and omits the wrapper when absent", () => {
     const withActions = renderShell({
       headerActions: (
