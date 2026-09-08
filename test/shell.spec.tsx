@@ -67,51 +67,6 @@ function renderShell(props: Partial<React.ComponentProps<typeof AppShell>> = {})
   );
 }
 
-describe("viewer role drives canBuy", () => {
-  it("hides the buy link from a rep who is not the primary buyer", () => {
-    renderShell({ viewerRole: "rep", isPrimaryBuyer: false });
-    expect(screen.queryByRole("link", { name: /See plans/ })).toBeNull();
-    // The row is still listed, just not actionable.
-    expect(screen.getByText("ICP Builder")).toBeTruthy();
-  });
-
-  it("shows the buy link to a rep who IS the primary buyer", () => {
-    renderShell({ viewerRole: "rep", isPrimaryBuyer: true });
-    expect(screen.getByRole("link", { name: /See plans/ })).toBeTruthy();
-  });
-
-  it("shows the buy link to a manager", () => {
-    renderShell({ viewerRole: "manager", isPrimaryBuyer: false });
-    expect(screen.getByRole("link", { name: /See plans/ })).toBeTruthy();
-  });
-
-  it("falls back to the permissive guess when the app passes no role", () => {
-    // Documents the compatibility fallback deliberately: a consumer that has
-    // not been updated keeps today's behaviour rather than losing its links.
-    renderShell();
-    expect(screen.getByRole("link", { name: /See plans/ })).toBeTruthy();
-  });
-});
-
-describe("viewer role drives canBuy — partial adoption", () => {
-  it("fails closed when the app sends a role but forgets isPrimaryBuyer", () => {
-    // Half-adopted consumer. Guessing `true` here would hand a rep the exact
-    // checkout link the portal refuses — the guess is only defensible when the
-    // app has told us nothing at all.
-    renderShell({ viewerRole: "rep" });
-    expect(screen.queryByRole("link", { name: /See plans/ })).toBeNull();
-  });
-
-  it("sends buyers to the portal, not to a route the product app does not have", () => {
-    // Relative "/products/..." resolves against icp.revheat.com and 404s; the
-    // upgrade page exists only on the portal.
-    renderShell({ viewerRole: "manager" });
-    expect(screen.getByRole("link", { name: /See plans/ }).getAttribute("href")).toBe(
-      "https://app.revheat.com/products/icp-builder/upgrade?source=sidebar",
-    );
-  });
-});
-
 // The vault is the ONE product the portal's original path rule knows about, so
 // it is the only fixture that can prove `currentProductCode` overrides it.
 const vaultProducts = [
@@ -129,6 +84,25 @@ const currentLinks = () =>
     .getAllByRole("link")
     .filter((el) => el.getAttribute("aria-current") === "page")
     .map((el) => el.textContent);
+
+// Shared fixtures for the v2 navigation-model tests below — see
+// shell-v2-nav-model plan §4.2. `hiddenProducts` adds a launched-but-hidden
+// row (the per-org sidebar switch) on top of `products`.
+const hiddenProducts = [
+  ...products,
+  {
+    code: "quotafit",
+    state: "launch" as const,
+    appUrl: "https://hire.revheat.com/app",
+    lockReason: null,
+    billingStatus: "active",
+    sidebarHidden: true,
+  },
+];
+const screens2 = [
+  { label: "Overview", href: "/app" },
+  { label: "Reports", href: "/app/reports" },
+];
 
 describe("active product row", () => {
   it("marks the row named by currentProductCode, and only that row", () => {
@@ -557,5 +531,128 @@ describe("footer", () => {
   it("shows the current year rather than a year baked in at build time", () => {
     renderShell();
     expect(screen.getByText(`© ${new Date().getFullYear()} RevHeat`)).toBeTruthy();
+  });
+});
+
+// The v2 navigation model — see shell-v2-nav-model plan §4.2, tests 1-8. The
+// rail switches PRODUCT, `.rh-menu` switches SCREEN within a product; the
+// "Available"/upsell nav and per-row upsell UI are gone from the rendered
+// rail (locked design decision — `buildRailModel().upsell` still exists but
+// nothing here reads it, per R3).
+describe("navigation model (v2)", () => {
+  // Accessible name, not raw textContent: the rail's home link has no visible
+  // text — its name comes from aria-label.
+  const nameOf = (el: Element) => el.getAttribute("aria-label") ?? el.textContent?.trim();
+
+  it("1: lists owned products only — no Available nav, no upsell rows, no hidden/unowned rows", () => {
+    renderShell({ products: hiddenProducts });
+    const rail = document.querySelector<HTMLElement>("aside.rh-rail")!;
+    const linkNames = within(rail)
+      .getAllByRole("link")
+      .map((el) => nameOf(el));
+    expect(linkNames).toEqual([
+      "RevHeat home",
+      "Website Readiness Audit",
+      "Trend Finder",
+      "All products →",
+    ]);
+    expect(screen.queryByRole("navigation", { name: "Available" })).toBeNull();
+    expect(document.querySelectorAll(".rh-rail__item--upsell")).toHaveLength(0);
+    expect(screen.queryByText(/QuotaFit/)).toBeNull();
+    expect(screen.queryByText(/ICP Builder/)).toBeNull();
+  });
+
+  it("2: the All-products row is last in the rail, with the portal-home href and its label text", () => {
+    renderShell();
+    const rail = document.querySelector<HTMLElement>("aside.rh-rail")!;
+    const links = Array.from(rail.querySelectorAll("a"));
+    const allProducts = links[links.length - 1]!;
+    expect(allProducts.className).toContain("rh-row--all");
+    expect(allProducts.getAttribute("href")).toBe("https://app.revheat.com/?source=sidebar");
+    expect(allProducts.textContent).toBe("All products →");
+  });
+
+  it("3: currentProductCode highlights its row and names the product in the banner", () => {
+    renderShell({ currentProductCode: "trend_finder" });
+    expect(currentLinks()).toEqual(["Trend Finder"]);
+    expect(document.querySelector(".rh-banner__product")!.textContent).toBe("Trend Finder");
+  });
+
+  it("4: an unrecognised product code shows no banner title and highlights nothing", () => {
+    renderShell({ currentProductCode: "not_a_product" });
+    expect(document.querySelector(".rh-banner__product")).toBeNull();
+    expect(document.querySelector('[aria-current="page"]')).toBeNull();
+  });
+
+  it("5: renders the screen menu, deriving the active tab, and lets an explicit active win", () => {
+    const { rerender } = renderShell({ screens: screens2, activePath: "/app/reports" });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+    expect(within(menu).getAllByRole("link").map((el) => el.textContent)).toEqual([
+      "Overview",
+      "Reports",
+    ]);
+    expect(within(menu).getByRole("link", { name: "Reports" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    expect(
+      within(menu).getByRole("link", { name: "Overview" }).getAttribute("aria-current"),
+    ).toBeNull();
+
+    rerender(
+      <AppShell
+        identity={member}
+        products={products}
+        activePath="/app/reports"
+        screens={[{ ...screens2[0]!, active: true }, screens2[1]!]}
+      >
+        <main>content</main>
+      </AppShell>,
+    );
+    const menu2 = screen.getByRole("navigation", { name: "Screens" });
+    expect(
+      within(menu2).getByRole("link", { name: "Overview" }).getAttribute("aria-current"),
+    ).toBe("page");
+    expect(
+      within(menu2).getByRole("link", { name: "Reports" }).getAttribute("aria-current"),
+    ).toBeNull();
+  });
+
+  it("6: the screen menu does not render with fewer than two screens, or when omitted", () => {
+    const empty = renderShell({ screens: [] });
+    expect(document.querySelector(".rh-menu")).toBeNull();
+    empty.unmount();
+
+    const single = renderShell({ screens: [screens2[0]!] });
+    expect(document.querySelector(".rh-menu")).toBeNull();
+    single.unmount();
+
+    renderShell();
+    expect(document.querySelector(".rh-menu")).toBeNull();
+  });
+
+  it("7: renders headerActions inside .rh-banner__actions, and omits the wrapper when absent", () => {
+    const withActions = renderShell({
+      headerActions: (
+        <button type="button" key="export">
+          Export
+        </button>
+      ),
+    });
+    const banner = document.querySelector(".rh-banner")!;
+    const actions = banner.querySelector(".rh-banner__actions");
+    expect(actions).not.toBeNull();
+    expect(within(actions as HTMLElement).getByRole("button", { name: "Export" })).toBeTruthy();
+    withActions.unmount();
+
+    renderShell();
+    expect(document.querySelector(".rh-banner__actions")).toBeNull();
+  });
+
+  it("8: degraded mode still lists fallback products (minus a bundle), with the All-products row present", () => {
+    renderShell({ degraded: true, products: [], productCodesFallback: ["all_access", "quotafit"] });
+    expect(screen.getByRole("link", { name: "QuotaFit" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "All-Access" })).toBeNull();
+    const rail = document.querySelector<HTMLElement>("aside.rh-rail")!;
+    expect(within(rail).getByRole("link", { name: "All products →" })).toBeTruthy();
   });
 });

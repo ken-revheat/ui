@@ -22,14 +22,14 @@ describe("AppShell", () => {
     expect(rail).toBeTruthy();
   });
 
-  it("lists an entitled product as a link and an upsell product separately", () => {
+  it("lists owned products only, and never an unowned one", () => {
     render(
       <AppShell identity={{ email: "ken@revheat.com", isInternal: false, roleLabel: null }} products={products} activePath="/app">
         <main>content</main>
       </AppShell>
     );
     expect(screen.getByRole("link", { name: /Website Readiness Audit/ })).toBeTruthy();
-    expect(screen.getByText(/ICP Builder/)).toBeTruthy();
+    expect(screen.queryByText(/ICP Builder/)).toBeNull();
   });
 
   it("shows the Admin banner link only when isInternal", () => {

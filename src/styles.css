@@ -29,6 +29,10 @@
 .rh-banner *,
 .rh-banner *::before,
 .rh-banner *::after,
+.rh-menu,
+.rh-menu *,
+.rh-menu *::before,
+.rh-menu *::after,
 .rh-footer,
 .rh-footer *,
 .rh-footer *::before,
@@ -121,11 +125,6 @@
 a.rh-rail__link:hover {
   background: var(--rh-n-100, #eff0f4);
 }
-.rh-rail__link--muted {
-  color: var(--rh-text-secondary, #505057);
-  cursor: default;
-}
-
 .rh-rail__label {
   min-width: 0;
   overflow: hidden;
@@ -157,48 +156,12 @@ a.rh-rail__link[aria-current="page"] {
   font-weight: var(--rh-weight-semibold, 600);
 }
 
-/* ── Available (upsell) rows: top-aligned, two-line, secondary text ─────── */
-.rh-rail__item--upsell .rh-rail__link {
-  align-items: flex-start;
-  color: var(--rh-text-secondary, #505057);
-}
-.rh-rail__item--upsell .rh-rail__tile {
-  margin-top: var(--rh-space-1, 0.25rem);
-}
-.rh-rail__col {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  min-width: 0;
-}
-.rh-rail__go {
-  font-size: var(--rh-text-xs, 0.75rem);
-  line-height: var(--rh-leading-xs, 1rem);
-  color: var(--rh-primary, #6143f9);
-  font-weight: var(--rh-weight-medium, 500);
-}
-a.rh-rail__link:hover .rh-rail__go {
-  text-decoration: underline;
-}
-
-/* "Coming soon" pill (neutral badge). */
-.rh-rail__soon {
-  align-self: flex-start;
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--rh-radius-full, 9999px);
-  padding: 0.125rem var(--rh-space-2, 0.5rem);
-  font-size: var(--rh-text-xs, 0.75rem);
-  line-height: var(--rh-leading-xs, 1rem);
-  font-weight: var(--rh-weight-medium, 500);
-  color: var(--rh-text-muted, #6c6c73);
-  background: var(--rh-n-100, #eff0f4);
-  white-space: nowrap;
-}
-
-/* ── Account block, pinned to the bottom ───────────────────────────────── */
+/* ── Account block ──────────────────────────────────────────────────────
+   Pinned to the bottom via `.rh-row--all`'s margin-top: auto below — that row
+   always renders and always immediately precedes this block, so exactly one
+   auto margin survives and the pair stays pinned together. ── */
 .rh-rail__account {
-  margin-top: auto;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
   gap: var(--rh-space-2, 0.5rem);
@@ -321,11 +284,37 @@ a.rh-rail__link:hover .rh-rail__go {
   color: var(--rh-text-secondary, #505057);
 }
 
+/* Trailing rail row → portal home. `.rh-row` is the generic row layout the
+   product rows will move onto later; `.rh-row--all` is the only user today. */
+.rh-row {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-3, 0.75rem);
+  min-height: var(--rh-row-comfortable, 3rem);
+  padding: var(--rh-space-2, 0.5rem) var(--rh-space-3, 0.75rem);
+  border-radius: var(--rh-radius-md, 12px);
+  text-decoration: none;
+  font-size: var(--rh-text-sm, 0.875rem);
+  line-height: var(--rh-leading-sm, 1.25rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-ink, #19191e);
+  transition: background-color var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.rh-row--all {
+  margin-top: auto;
+  border-top: 1px solid var(--rh-border, #e4e5ea);
+  border-radius: 0;
+  padding-top: var(--rh-space-3, 0.75rem);
+  color: var(--rh-text-secondary, #505057);
+}
+a.rh-row--all:hover {
+  color: var(--rh-primary, #6143f9);
+  text-decoration: underline;
+}
+
 /* ── Banner + footer ──────────────────────────────────────────────────── */
 .rh-banner {
   display: flex;
-  /* `margin-right: auto` on the brand does the job space-between used to, and
-     survives the hamburger becoming a third child on narrow screens. */
   justify-content: flex-start;
   align-items: center;
   gap: var(--rh-space-3, 0.75rem);
@@ -336,8 +325,47 @@ a.rh-rail__link:hover .rh-rail__go {
 .rh-banner__brand {
   display: inline-flex;
   align-items: center;
-  margin-right: auto;
   text-decoration: none;
+}
+
+/* Groups the hamburger, the "← Portal" link, the wordmark and the product
+   title into one flex item so `margin-right: auto` has exactly one owner —
+   see shell-v2-nav-model plan R2. Without this wrapper, the title becoming a
+   fourth flat banner child would split the free space between it and the
+   brand link and open a gap mid-banner. */
+.rh-banner__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-3, 0.75rem);
+  min-width: 0;
+  margin-right: auto;
+}
+.rh-banner__portal {
+  flex: 0 0 auto;
+  font-size: var(--rh-text-sm, 0.875rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-text-secondary, #505057);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.rh-banner__portal:hover {
+  color: var(--rh-primary, #6143f9);
+  text-decoration: underline;
+}
+.rh-banner__product {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--rh-text-sm, 0.875rem);
+  font-weight: var(--rh-weight-semibold, 600);
+  color: var(--rh-ink, #19191e);
+}
+.rh-banner__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-2, 0.5rem);
+  flex: 0 0 auto;
 }
 
 /* Drawer trigger. Hidden by CSS rather than by a JS breakpoint check so it is
@@ -377,6 +405,49 @@ a.rh-rail__link:hover .rh-rail__go {
 }
 .rh-banner__admin:hover {
   text-decoration: underline;
+}
+
+/* Screen menu — 48px tall, scrolls sideways below the breakpoint rather than
+   wrapping, so a product with many screens never grows a second row. */
+.rh-menu {
+  display: flex;
+  align-items: center;
+  gap: var(--rh-space-1, 0.25rem);
+  flex: 0 0 auto;
+  height: 3rem;
+  padding: 0 var(--rh-space-4, 1rem);
+  border-bottom: 1px solid var(--rh-border, #e4e5ea);
+  background: var(--rh-surface, #ffffff);
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.rh-menu::-webkit-scrollbar {
+  display: none;
+}
+.rh-menu__tab {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-height: var(--rh-space-8, 2rem);
+  padding: 0 var(--rh-space-3, 0.75rem);
+  border-radius: var(--rh-radius-sm, 8px);
+  /* 13px per the spec; there is no --rh-text-* step at 13px, so no var here. */
+  font-size: 0.8125rem;
+  line-height: var(--rh-leading-sm, 1.25rem);
+  font-weight: var(--rh-weight-medium, 500);
+  color: var(--rh-text-secondary, #505057);
+  text-decoration: none;
+  transition: background-color var(--rh-duration-fast, 120ms) var(--rh-ease-out, cubic-bezier(0.16, 1, 0.3, 1));
+}
+.rh-menu__tab:hover {
+  background: var(--rh-n-100, #eff0f4);
+}
+.rh-menu__tab[aria-current="page"] {
+  background: var(--rh-primary-subtle, #edefff);
+  color: var(--rh-primary, #6143f9);
+  font-weight: var(--rh-weight-semibold, 600);
 }
 .rh-footer {
   display: flex;
@@ -507,5 +578,20 @@ a.rh-rail__link:hover .rh-rail__go {
   }
   .rh-banner__menu {
     display: inline-flex;
+  }
+}
+
+/* Print: chrome is navigation; only the page content is worth ink. The grid
+   collapses too, or the hidden rail leaves a 260px blank gutter. */
+@media print {
+  .rh-rail,
+  .rh-drawer,
+  .rh-banner,
+  .rh-menu,
+  .rh-footer {
+    display: none;
+  }
+  .rh-shell {
+    grid-template-columns: 1fr;
   }
 }

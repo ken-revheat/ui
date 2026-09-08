@@ -74,4 +74,53 @@ export declare const PORTAL_ORIGIN = "https://app.revheat.com";
  * `/products/[slug]/upgrade` exists only on the portal.
  */
 export declare function upgradeHref(slug: string, source: "sidebar" | "renew"): string;
+/**
+ * One item in the horizontal in-product screen menu (`.rh-menu`). The rail
+ * switches PRODUCT; this switches SCREEN within a product — see the shell v2
+ * nav-model design doc. `active` is optional: pass it to force a tab active,
+ * or omit it everywhere and let `resolveActiveScreen` derive it from the path.
+ */
+export interface ShellScreen {
+    label: string;
+    href: string;
+    active?: boolean;
+    external?: boolean;
+}
+/**
+ * Fills in `active` on every item. Two modes:
+ *
+ * 1. **Explicit wins, for the whole array.** If ANY item carries `active`,
+ *    each item's `active` becomes exactly its own `active === true` (so
+ *    undefined/false → false, and only explicitly-true items light up) and
+ *    no derivation happens at all — a caller that knows better is trusted
+ *    completely, not blended with a guess.
+ * 2. **Otherwise, longest-prefix-of-path wins.** `activePath` is normalised by
+ *    stripping its query and hash. Each non-external item's `href` is reduced
+ *    to a pathname (resolved against a throwaway base so a relative href still
+ *    works); it is a candidate when `activePath` equals that pathname or
+ *    starts with it at a "/" boundary (so `/app` matches `/app/reports` but
+ *    NOT `/appendix`). The candidate with the longest pathname wins; ties keep
+ *    the earliest array index. `external: true` items are never candidates.
+ *
+ * Pure — never mutates `screens` or its items.
+ */
+export declare function resolveActiveScreen(screens: ShellScreen[], activePath: string): ShellScreen[];
+/**
+ * Portal home, tagged as a sidebar referral. The rail's trailing "All
+ * products →" row and the banner's "← Portal" link both point here.
+ *
+ * Declared at the END of the file, after `withSource` and `PORTAL_ORIGIN`:
+ * module-scope `const` initialisers run top-to-bottom, so declaring this
+ * before either of them would evaluate to "undefined/?source=sidebar" with no
+ * error.
+ */
+export declare const ALL_PRODUCTS_HREF: string;
+/**
+ * The catalog title for a product code, or `undefined` — never a fabricated
+ * name. `undefined` for `code === undefined`, `""`, or any code the catalog
+ * does not have. `catalog` is taken explicitly (rather than importing
+ * PRODUCT_CATALOG here) so this file keeps its type-only import of
+ * `catalog.js` and gains no runtime dependency on it.
+ */
+export declare function productTitle(code: string | undefined, catalog: ProductDef[]): string | undefined;
 //# sourceMappingURL=core.d.ts.map

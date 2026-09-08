@@ -1,5 +1,5 @@
 import * as React from "react";
-import { type MeProduct } from "./core.js";
+import { type MeProduct, type ShellScreen } from "./core.js";
 export interface AppShellIdentity {
     email: string | null;
     /**
@@ -56,6 +56,10 @@ export interface AppShellProps {
      */
     currentProductCode?: string;
     adminHref?: string;
+    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    screens?: ShellScreen[];
+    /** App-supplied controls, rendered in the banner between the title and Admin. */
+    headerActions?: React.ReactNode;
     /** Replaces the built-in account block entirely. */
     accountMenu?: React.ReactNode;
     /**
@@ -67,5 +71,5 @@ export interface AppShellProps {
     onSignOut?: () => void;
     children: React.ReactNode;
 }
-export declare function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded, productCodesFallback, activePath, currentProductCode, adminHref, accountMenu, onSignOut, children, }: AppShellProps): React.JSX.Element;
+export declare function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded, productCodesFallback, activePath, currentProductCode, adminHref, screens, headerActions, accountMenu, onSignOut, children, }: AppShellProps): React.JSX.Element;
 //# sourceMappingURL=react.d.ts.map

@@ -3,7 +3,7 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { PRODUCT_CATALOG } from "./catalog.js";
-import { buildRailModel, withSource, upgradeHref, isActiveProduct, PORTAL_ORIGIN, } from "./core.js";
+import { buildRailModel, withSource, isActiveProduct, PORTAL_ORIGIN, ALL_PRODUCTS_HREF, productTitle, resolveActiveScreen, } from "./core.js";
 import { iconPathsFor } from "./icons.js";
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue) and the existing
 // `@media (max-width: 900px)` rule in styles.css. A raw px query on purpose —
@@ -140,15 +140,6 @@ function EntitledRow({ p, activePath, currentProductCode, }) {
     // and what a screen reader announces. No parallel `--active` class: an
     // emitted class with no rule behind it is a trap for the next reader.
     _jsx("li", { className: "rh-rail__item", children: _jsxs("a", { className: "rh-rail__link", href: href, "aria-current": active ? "page" : undefined, children: [_jsx("span", { className: "rh-rail__tile", "aria-hidden": true, children: _jsx(ProductIcon, { code: p.code }) }), _jsx("span", { className: "rh-rail__label", children: p.title })] }) }));
-}
-function UpsellRow({ p, canBuy }) {
-    if (p.unlaunched) {
-        return (_jsx("li", { className: "rh-rail__item rh-rail__item--upsell rh-rail__item--soon", children: _jsxs("span", { className: "rh-rail__link rh-rail__link--muted", children: [_jsx("span", { className: "rh-rail__tile", "aria-hidden": true, children: _jsx(ProductIcon, { code: p.code }) }), _jsxs("span", { className: "rh-rail__col", children: [_jsx("span", { className: "rh-rail__label", children: p.title }), _jsx("span", { className: "rh-rail__soon", children: "Coming soon" })] })] }) }));
-    }
-    const isRenew = p.state === "locked_billing";
-    const href = canBuy ? upgradeHref(p.slug, isRenew ? "renew" : "sidebar") : undefined;
-    const cta = isRenew ? "Reactivate →" : "See plans →";
-    return (_jsx("li", { className: "rh-rail__item rh-rail__item--upsell", children: href ? (_jsxs("a", { className: "rh-rail__link", href: href, children: [_jsx("span", { className: "rh-rail__tile", "aria-hidden": true, children: _jsx(ProductIcon, { code: p.code }) }), _jsxs("span", { className: "rh-rail__col", children: [_jsx("span", { className: "rh-rail__label", children: p.title }), _jsx("span", { className: "rh-rail__go", children: cta })] })] })) : (_jsxs("span", { className: "rh-rail__link rh-rail__link--muted", children: [_jsx("span", { className: "rh-rail__tile", "aria-hidden": true, children: _jsx(ProductIcon, { code: p.code }) }), _jsx("span", { className: "rh-rail__col", children: _jsx("span", { className: "rh-rail__label", children: p.title }) })] })) }));
 }
 // Same items, same order and same destinations as the portal's own account menu
 // (RhSidebarRail.vue). "Account settings" and "Team & Access" both point at
@@ -390,7 +381,7 @@ function Drawer({ id, closing, onClose, children, }) {
 /* ------------------------------------------------------------------ */
 /* shell                                                               */
 /* ------------------------------------------------------------------ */
-export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded = false, productCodesFallback = [], activePath, currentProductCode, adminHref, accountMenu, onSignOut, children, }) {
+export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded = false, productCodesFallback = [], activePath, currentProductCode, adminHref, screens, headerActions, accountMenu, onSignOut, children, }) {
     const isNarrow = useIsNarrow();
     const drawer = useDrawer();
     const drawerId = React.useId();
@@ -408,6 +399,8 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
             dismissDrawer();
     }, [isNarrow, dismissDrawer]);
     const isStaff = identity.isStaff ?? identity.isInternal;
+    const title = productTitle(currentProductCode, PRODUCT_CATALOG);
+    const menuItems = screens && screens.length >= 2 ? resolveActiveScreen(screens, activePath) : null;
     const model = buildRailModel({
         me: degraded
             ? null
@@ -418,6 +411,10 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
                 // app starts sending a real `viewerRole`, an omitted `isPrimaryBuyer`
                 // is a gap in its adoption, not a request for the old guess — and
                 // guessing `true` there hands checkout to a rep the portal refuses.
+                // `canBuy` (derived below from viewerRole/isPrimaryBuyer) is retained
+                // on the model for API stability but renders nothing in v2 — the
+                // upsell nav that read it is gone. It is exercised in core.spec.ts,
+                // not in this file's DOM tests.
                 isPrimaryBuyer: isPrimaryBuyer ?? viewerRole === undefined,
                 products,
             },
@@ -425,11 +422,11 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
         productCodesFallback,
         catalog: PRODUCT_CATALOG,
     });
-    const railBody = (_jsxs(_Fragment, { children: [_jsx("a", { className: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandMarkR, {}) }), model.entitled.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Your products", children: [_jsx("p", { className: "rh-rail__heading", children: "Your products" }), _jsx("ul", { children: model.entitled.map((p) => (_jsx(EntitledRow, { p: p, activePath: activePath, currentProductCode: currentProductCode }, p.code))) })] })), model.upsell.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Available", children: [_jsx("p", { className: "rh-rail__heading", children: "Available" }), _jsx("ul", { children: model.upsell.map((p) => (_jsx(UpsellRow, { p: p, canBuy: model.canBuy }, p.code))) })] })), _jsx("div", { className: "rh-rail__account", children: accountMenu ?? (_jsx(AccountMenu, { identity: identity, isStaff: isStaff, adminHref: adminHref, onSignOut: onSignOut })) })] }));
+    const railBody = (_jsxs(_Fragment, { children: [_jsx("a", { className: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandMarkR, {}) }), model.entitled.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Your products", children: [_jsx("p", { className: "rh-rail__heading", children: "Your products" }), _jsx("ul", { children: model.entitled.map((p) => (_jsx(EntitledRow, { p: p, activePath: activePath, currentProductCode: currentProductCode }, p.code))) })] })), _jsx("a", { className: "rh-row rh-row--all", href: ALL_PRODUCTS_HREF, children: "All products \u2192" }), _jsx("div", { className: "rh-rail__account", children: accountMenu ?? (_jsx(AccountMenu, { identity: identity, isStaff: isStaff, adminHref: adminHref, onSignOut: onSignOut })) })] }));
     return (_jsxs("div", { className: "rh-shell", children: [!isNarrow && (_jsx("aside", { className: "rh-rail", "aria-label": "RevHeat products", children: railBody })), drawer.isMounted && (_jsx(Drawer
             // Every open is a fresh Drawer — see `useDrawer`. Without the key,
             // reopening mid-exit reuses the instance and none of its mount work
             // (focus in, scroll lock) happens.
-            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandWordmark, {}) }), isStaff && adminHref && (_jsx("a", { className: "rh-banner__admin", href: adminHref, children: "Admin" }))] }), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
+            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (_jsx("a", { className: "rh-banner__admin", href: adminHref, children: "Admin" }))] }), menuItems && (_jsx("nav", { className: "rh-menu", "aria-label": "Screens", children: menuItems.map((s) => (_jsx("a", { className: "rh-menu__tab", href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, children: s.label }, s.href))) })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
 }
 //# sourceMappingURL=react.js.map
