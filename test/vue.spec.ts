@@ -252,21 +252,32 @@ describe("navigation model (v2)", () => {
 
   it("6d: an off-origin href that forgot external:true is still left to the browser", async () => {
     const onNavigate = vi.fn();
+    // Captured up front: happy-dom really navigates on an un-prevented anchor
+    // click, so the page's origin changes once the Portal link is clicked.
+    const here = `${window.location.origin}/app/here`;
     mountShell({
-      screens: [...screens2, { label: "Portal", href: "https://app.revheat.com/account" }],
+      screens: [
+        ...screens2,
+        { label: "Portal", href: "https://app.revheat.com/account" },
+        { label: "Here", href: here },
+      ],
       activePath: "/app",
       onNavigate,
     });
     await nextTick();
     const menu = screen.getByRole("navigation", { name: "Screens" });
+    // A same-origin ABSOLUTE href is routed like a relative one…
+    const same = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    within(menu).getByRole("link", { name: "Here" }).dispatchEvent(same);
+    expect(onNavigate).toHaveBeenCalledWith(here);
+    expect(same.defaultPrevented).toBe(true);
+    // …while the off-origin one is not intercepted. Clicked last: the browser
+    // follows it, and the page's origin is app.revheat.com from here on.
+    onNavigate.mockClear();
     const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
     within(menu).getByRole("link", { name: "Portal" }).dispatchEvent(ev);
     expect(onNavigate).not.toHaveBeenCalled();
     expect(ev.defaultPrevented).toBe(false);
-    // …while a same-origin href is routed.
-    const same = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
-    within(menu).getByRole("link", { name: "Reports" }).dispatchEvent(same);
-    expect(onNavigate).toHaveBeenCalledWith("/app/reports");
   });
 
   it("6c: without a navigate listener, screen tabs are plain links (default not prevented)", async () => {

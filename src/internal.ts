@@ -26,9 +26,11 @@ export function isModifiedClick(e: {
  * no click to intercept, so the answer does not matter; report false.
  */
 export function isSameOriginHref(href: string): boolean {
-  if (typeof location === "undefined") return false;
+  if (typeof document === "undefined") return false;
   try {
-    return new URL(href, location.href).origin === location.origin;
+    // Resolve against the document's base (a <base href> can point a relative
+    // link off-origin) — the same base the rendered anchor resolves against.
+    return new URL(href, document.baseURI).origin === document.location.origin;
   } catch {
     return true;
   }
