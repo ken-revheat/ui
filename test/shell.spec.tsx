@@ -29,8 +29,14 @@ beforeEach(() => {
     },
   })) as unknown as typeof window.matchMedia;
 });
+// happy-dom really follows an un-prevented anchor click (the off-origin
+// "Portal"/"Docs" links in the navigate tests), which moves the shared
+// document's URL — and with it the origin every later same-origin check
+// compares against. Put it back after every test.
+const INITIAL_HREF = window.location.href;
 afterEach(() => {
   vi.useRealTimers();
+  if (window.location.href !== INITIAL_HREF) window.location.href = INITIAL_HREF;
 });
 
 const products = [
