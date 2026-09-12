@@ -1,6 +1,6 @@
 {
   "name": "@revheat/ui",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "sideEffects": [
     "*.css"
@@ -43,8 +43,10 @@
     "test": "vitest run",
     "check:dist": "[ -z \"$(git status --porcelain -- dist)\" ] || { echo 'dist/ is stale, staged-but-uncommitted, or has untracked files. Run: npm run compile, then COMMIT dist/'; exit 1; }",
     "check:client": "[ \"$(head -1 dist/react.js)\" = '\"use client\";' ] || { echo 'dist/react.js lost its \"use client\" directive — both Next.js consumers fail to build without it'; exit 1; }; [ \"$(head -1 dist/vue.js)\" != '\"use client\";' ] || { echo 'dist/vue.js must not carry \"use client\" — it has no React import graph to gate'; exit 1; }; ! grep -q 'from \"react' dist/vue.js || { echo 'dist/vue.js imports from react — that drags the whole React import graph into Vue-only consumers'; exit 1; }",
-    "verify": "npm run compile && npm test && npm run check:client && npm run check:dist"
+    "check:types": "tsc --noEmit",
+    "verify": "npm run compile && npm run check:types && npm test && npm run check:client && npm run check:dist"
   },
+  "//check:types": "`compile` only typechecks src/ (tsconfig.build.json excludes test/), so test/ could — and did — sit broken under the ROOT tsconfig while every gate stayed green. The specs are the only executable description of the shell's contract; a type error in them is a defect in the description. Root config, so it covers src/ and test/ together.",
   "//check:client": "AppShell uses hooks (useState/useEffect/useId) and createPortal, and both React consumers mount it from an async Server Component. Without the directive on line 1 of dist/react.js their build fails outright with 'useState only works in a Client Component'. It was decorative through v1.3.0, when AppShell was hook-free; from v1.4.0 it is load-bearing, so it gets a gate.",
   "//peerDependencies": "react-dom is optional on purpose even though ./react imports createPortal from it. The Vue consumers (Call Analyzer) import only ./icons and ./catalog, so their bundler never resolves react-dom and marking it required would only produce a peer warning on an install that is completely fine. Any app importing ./react is a React DOM app and already has it. `vue` is optional for the same reason: a React-only consumer never resolves it, and a required peer would only produce a spurious install warning.",
   "peerDependencies": {
@@ -66,6 +68,7 @@
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.1.0",
+    "@types/node": "^22.20.2",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.7",
     "@vue/test-utils": "^2.5.0",

@@ -65,6 +65,74 @@
   background: var(--rh-surface, #ffffff);
 }
 
+/* Pinned to the viewport. `:not(.rh-rail--drawer)` is load-bearing twice
+   over: the drawer panel IS a `.rh-rail` and is already `position: fixed`
+   (relying on source order to win that cascade would be a trap), and it must
+   keep its own 288px/85vw sizing rather than a full-height in-flow column.
+
+   `height` — not `max-height` — is what makes the bottom of the rail the
+   bottom of the SCREEN. `.rh-row--all`'s `margin-top: auto` (below) pins the
+   All-products row and the account block to the rail's bottom edge; in a
+   grid row stretched to document height that edge sits at the foot of the
+   whole page, which is why on a long report the account menu was a mile
+   down. `overflow-y` keeps a long product list reachable on a short screen.
+
+   `100dvh` overrides the `100vh` above it. The rail is hidden below 900px, so
+   this is not a phone case — it is iPad landscape (1024px) and any browser
+   with a collapsing toolbar, where `100vh` is the LARGE viewport and the
+   bottom of the rail sits behind the chrome. `overflow-y: auto` cannot rescue
+   that: the overflow is outside the scrollport, not inside it. Which would
+   hide exactly the account block and "All products →" that this whole rule
+   exists to keep reachable. The plain `100vh` line stays as the fallback for
+   engines without `dvh`.
+
+   `align-self: start` is belt-and-braces, not load-bearing: a grid item's
+   default `stretch` already behaves as `start` once its cross size is
+   definite, which `height` makes it. It is kept so the rule still reads
+   correctly if the height ever becomes `auto` again.
+
+   REJECTED, and worth naming: `.rh-shell { height: 100vh; overflow: hidden }`
+   + `.rh-shell__main { overflow-y: auto }` pins the rail with no dependence
+   on any ancestor's overflow, which is sticky's one real fragility (any
+   ancestor with `overflow: hidden` — `body { overflow-x: hidden }` is the
+   usual culprit — silently kills it). It was rejected because it moves the
+   scrollport off the document: page-level scroll restoration, `scroll-margin`
+   and the browser's own find-on-page scrolling all change behaviour in eight
+   apps at once. Sticky keeps the document scrolling and is reversible.
+
+   Known and accepted: `overflow-y: auto` makes the rail a clipping context,
+   so the account pop-up (`.rh-rail__menu`, absolute, opens upward) is
+   clipped if it is ever taller than the space above its trigger. It never
+   is — the menu is at most five rows and sits at the bottom of a 100vh
+   column — and the drawer panel has shipped with the same `overflow-y: auto`
+   since v2.0.0. The pop-up's `box-shadow` IS clipped at the rail's edges, so
+   it reads flatter against the rail than it does in the drawer. Cosmetic,
+   and the alternative is giving up the scroll.
+
+   Also accepted: `position: sticky` makes the rail its own stacking context,
+   so `.rh-rail__menu`'s `z-index: var(--rh-z-popover, 1400)` no longer
+   competes at the root. A positioned descendant of `.rh-shell__main` with a
+   `z-index` above 0 would now paint over the account pop-up, because main
+   comes after the rail in DOM order. No consumer does that today, and the
+   only alternative is giving up sticky — which is the bug this rule exists to
+   fix. LOW, 2026-09-12 re-review.
+
+   Considered and NOT needed: an extra bottom strip (`padding-bottom` /
+   `calc(100dvh - Xpx)`) so a collapsing mobile toolbar cannot cover the
+   account block. `dvh` is defined as the DYNAMIC viewport — it already
+   tracks the visible height as the toolbar shows and hides, so the strip
+   would be dead space at every size, and on the desktop rail (`100vh`, no
+   toolbar) it would be pure lost height. `100vh` first / `100dvh` second is
+   the whole fix; the order is asserted in test/styles.spec.ts. */
+.rh-rail:not(.rh-rail--drawer) {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+}
+
 /* No list markers, ever — this is the guard against the rollback's #1 defect
    (browser-default sidebar bullets). */
 .rh-rail ul {
