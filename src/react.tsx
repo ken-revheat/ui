@@ -97,13 +97,28 @@ export interface AppShellProps {
   /** Horizontal in-product screen menu. Rendered only when 2+ items. */
   screens?: ShellScreen[];
   /**
-   * Client-side navigation hook for the screen menu. When present, a plain
-   * left-click on a non-external tab is intercepted (`preventDefault`) and
-   * `onNavigate(href)` is called instead of letting the browser load the
-   * page — wire it to your router's push. Modified clicks (⌘/ctrl/shift/alt,
-   * middle button) and `external: true` tabs keep the browser's default so
-   * open-in-new-tab still works, and so does an off-origin href that forgot
-   * `external: true`. Omit it and tabs are plain links.
+   * Client-side navigation hook. When present, a plain left-click on a
+   * same-origin link is intercepted (`preventDefault`) and `onNavigate(href)`
+   * is called instead of letting the browser load the page — wire it to your
+   * router's push.
+   *
+   * ⚠️ As of v2.2.0 this is the WHOLE shell, not just the screen menu: the
+   * rail's home link, every entitled product row, "All products →", the
+   * account menu's items and the staff Admin link all route through it too.
+   * Before v2.2.0 only the screen tabs did, and everything else was a full
+   * page load. If your handler assumes it only ever sees a screen tab's href,
+   * that assumption broke here.
+   *
+   * The href you receive is normalised, never the raw attribute: it is
+   * resolved against the document's base URL and handed back as
+   * path + search + hash. So an absolute same-origin href loses its origin, a
+   * document-relative one is resolved (against `<base href>` if you ship
+   * one), and a hash-only one keeps the current path AND query string.
+   *
+   * Modified clicks (⌘/ctrl/shift/alt, middle button) and `external: true`
+   * tabs keep the browser's default so open-in-new-tab still works, and so
+   * does an off-origin href that forgot `external: true`. Omit the prop and
+   * every one of these is a plain link.
    *
    * This is a function prop: whatever renders `<AppShell onNavigate>` must
    * itself be a Client Component ("use client") — a Server Component cannot

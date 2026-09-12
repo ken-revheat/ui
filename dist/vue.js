@@ -558,8 +558,15 @@ export const AppShell = defineComponent({
         // vnode props at render time.
         const instance = getCurrentInstance();
         const hasSignOut = () => Boolean(instance?.vnode.props?.["onSignOut"]);
-        // Same trick for `navigate`: only intercept screen-tab clicks when the
-        // app actually listens (`@navigate`); otherwise tabs stay plain links.
+        // Same trick for `navigate`: only intercept a click when the app actually
+        // listens (`@navigate`); otherwise every link stays a plain link.
+        //
+        // ⚠️ As of v2.2.0 "a click" means every same-origin link the shell
+        // renders — the rail's home link, the product rows, "All products →", the
+        // account menu and Admin — not only the screen tabs it meant through
+        // v2.1.0. The href handed to the listener is normalised to
+        // path + search + hash against the document's base URL, never the raw
+        // attribute. Kept in step with the React prop's doc in src/react.tsx.
         const hasNavigate = () => Boolean(instance?.vnode.props?.["onNavigate"]);
         // One factory, used by every link the shell renders. Defined once in
         // `setup`, which is correct and costs nothing: each CALL runs
