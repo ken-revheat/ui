@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { PRODUCT_CATALOG } from "./catalog.js";
 import { buildRailModel, withSource, isActiveProduct, PORTAL_ORIGIN, ALL_PRODUCTS_HREF, productTitle, resolveActiveScreen, } from "./core.js";
 import { iconPathsFor } from "./icons.js";
-import { isModifiedClick, isSameOriginHref } from "./internal.js";
+import { shellNavHandler } from "./internal.js";
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue) and the existing
 // `@media (max-width: 900px)` rule in styles.css. A raw px query on purpose —
 // this package has no Tailwind, so there is no `md:` screen to inherit.
@@ -133,14 +133,14 @@ function BrandWordmark() {
 /* ------------------------------------------------------------------ */
 /* rail rows                                                           */
 /* ------------------------------------------------------------------ */
-function EntitledRow({ p, activePath, currentProductCode, }) {
+function EntitledRow({ p, activePath, currentProductCode, navOn, }) {
     const href = withSource(p.appUrl);
     const active = isActiveProduct(p, activePath, currentProductCode);
     return (
     // `aria-current="page"` is the whole hook — it is what styles.css targets
     // and what a screen reader announces. No parallel `--active` class: an
     // emitted class with no rule behind it is a trap for the next reader.
-    _jsx("li", { className: "rh-rail__item", children: _jsxs("a", { className: "rh-rail__link", href: href, "aria-current": active ? "page" : undefined, children: [_jsx("span", { className: "rh-rail__tile", "aria-hidden": true, children: _jsx(ProductIcon, { code: p.code }) }), _jsx("span", { className: "rh-rail__label", children: p.title })] }) }));
+    _jsx("li", { className: "rh-rail__item", children: _jsxs("a", { className: "rh-rail__link", href: href, "aria-current": active ? "page" : undefined, onClick: navOn(href), children: [_jsx("span", { className: "rh-rail__tile", "aria-hidden": true, children: _jsx(ProductIcon, { code: p.code }) }), _jsx("span", { className: "rh-rail__label", children: p.title })] }) }));
 }
 // Same items, same order and same destinations as the portal's own account menu
 // (RhSidebarRail.vue). "Account settings" and "Team & Access" both point at
@@ -162,7 +162,7 @@ function accountItemsFor(isStaff, adminHref) {
     }
     return items;
 }
-function AccountMenu({ identity, isStaff, adminHref, onSignOut }) {
+function AccountMenu({ identity, isStaff, adminHref, onSignOut, navOn }) {
     const [open, setOpen] = React.useState(false);
     const menuId = React.useId();
     const rootRef = React.useRef(null);
@@ -255,7 +255,38 @@ function AccountMenu({ identity, isStaff, adminHref, onSignOut }) {
         focusFirstOnOpen.current = true;
         setOpen(true);
     };
-    return (_jsxs("div", { className: "rh-rail__account-menu", ref: rootRef, children: [open && (_jsxs("div", { className: "rh-rail__menu", id: menuId, role: "menu", ref: menuRef, onKeyDown: onMenuKeyDown, children: [items.map((item) => (_jsx("a", { className: "rh-rail__menu-item", role: "menuitem", tabIndex: -1, href: item.href, children: item.label }, item.key))), onSignOut ? (_jsx("button", { type: "button", className: "rh-rail__menu-item rh-rail__menu-item--signout", role: "menuitem", tabIndex: -1, onClick: onSignOut, children: "Sign out" })) : (_jsx("a", { className: "rh-rail__menu-item rh-rail__menu-item--signout", role: "menuitem", tabIndex: -1, href: signOutHref, children: "Sign out" }))] })), _jsxs("button", { type: "button", className: "rh-rail__account-trigger", ref: triggerRef, "aria-haspopup": "menu", "aria-expanded": open, "aria-controls": open ? menuId : undefined, onClick: () => (open ? setOpen(false) : openAndFocusFirst()), onKeyDown: (e) => {
+    /**
+     * A menu item that routes in-app has to close the menu itself. The only
+     * thing that closed it before was an OUTSIDE pointerdown, and a click on an
+     * item is inside — it worked purely because the click was a full page load
+     * and the document went away with it. Once v2.2.0 calls preventDefault, the
+     * pop-up stays open over the page the user just navigated to, with focus
+     * still on the item they clicked.
+     *
+     * `defaultPrevented` is the signal, not "the handler exists": a cmd-click
+     * returns early from the handler and really does open a new tab, and the
+     * menu must still be there when the user comes back to this one.
+     */
+    const navItemOn = (href) => {
+        const handler = navOn(href);
+        if (!handler)
+            return undefined;
+        return (e) => {
+            // `try/finally` for the same reason as `navOn` — see the note there.
+            try {
+                handler(e);
+            }
+            finally {
+                if (e.defaultPrevented)
+                    closeAndRefocus();
+            }
+        };
+    };
+    return (_jsxs("div", { className: "rh-rail__account-menu", ref: rootRef, children: [open && (_jsxs("div", { className: "rh-rail__menu", id: menuId, role: "menu", ref: menuRef, onKeyDown: onMenuKeyDown, children: [items.map((item) => (_jsx("a", { className: "rh-rail__menu-item", role: "menuitem", tabIndex: -1, href: item.href, 
+                        /* Client-side inside the portal (these all point at
+                           app.revheat.com); a real link everywhere else. Sign-out is
+                           deliberately NOT in this list — it must hit the server. */
+                        onClick: navItemOn(item.href), children: item.label }, item.key))), onSignOut ? (_jsx("button", { type: "button", className: "rh-rail__menu-item rh-rail__menu-item--signout", role: "menuitem", tabIndex: -1, onClick: onSignOut, children: "Sign out" })) : (_jsx("a", { className: "rh-rail__menu-item rh-rail__menu-item--signout", role: "menuitem", tabIndex: -1, href: signOutHref, children: "Sign out" }))] })), _jsxs("button", { type: "button", className: "rh-rail__account-trigger", ref: triggerRef, "aria-haspopup": "menu", "aria-expanded": open, "aria-controls": open ? menuId : undefined, onClick: () => (open ? setOpen(false) : openAndFocusFirst()), onKeyDown: (e) => {
                     if (e.key === "ArrowDown" && !open) {
                         e.preventDefault();
                         openAndFocusFirst();
@@ -387,8 +418,66 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
     const drawer = useDrawer();
     const drawerId = React.useId();
     const { close: closeDrawer, dismiss: dismissDrawer } = drawer;
-    // The portal only closes its drawer from rows that emit `navigate`, so its
-    // own "RevHeat home" link leaves the menu sitting open over the new page.
+    // One factory, used by every link the shell renders. Not memoized, because
+    // memoizing it would buy nothing: `useCallback` would stabilise only THIS
+    // function's identity, while every CALL still runs `shellNavHandler` and so
+    // re-reads `document` — the same-origin decision and the handler handed to
+    // each anchor are recomputed per render either way.
+    //
+    // (Through v2.1.0 the comment here claimed the non-memoization was what
+    // allowed the same-origin decision to be retaken after hydration. That was
+    // wrong — the check lives in the call, not in the closure — and it would
+    // have talked the next reader out of a memoization that is harmless. The
+    // reason SSR is safe is `isSameOriginHref`'s own `typeof document` guard.)
+    /**
+     * ⛔ An intercepted click MUST close the drawer, and the `activePath` effect
+     * below is not enough to do it.
+     *
+     * Through v2.1.0 every rail row was a plain browser link, so tapping one
+     * inside the drawer tore the whole document down — the drawer could not
+     * survive its own links. v2.2.0 calls `preventDefault` on the same rows, and
+     * nothing was left to close it: the panel stays up, focus-trapped and
+     * body-scroll-locked, over the page the router just moved to.
+     *
+     * The `activePath` effect only fires when the consumer re-renders with a NEW
+     * path, so it covers neither of the two cases that matter most:
+     *   - a row pointing at the page you are already on (inside the portal that
+     *     is "All products →" on the portal home, the R-mark, and the Training
+     *     Vault row — every one of them same-origin, so every one intercepted).
+     *     `activePath` never changes, so the drawer never closes at all and the
+     *     tap looks like it did nothing. Tapping again also does nothing; only
+     *     Escape, the close button or the backdrop gets the user out.
+     *   - a row pointing somewhere else, for the whole length of the router's
+     *     async transition rather than on the tap.
+     *
+     * `defaultPrevented` is the signal, exactly as it is for the account pop-up
+     * (`navItemOn`): a modified click returns early from the handler, really does
+     * open a new tab, and must leave the drawer where it was. `close()` is a
+     * no-op unless the phase is "open", so wide-viewport rail clicks pay nothing.
+     */
+    const navOn = (href, external) => {
+        const handler = shellNavHandler(href, onNavigate, external);
+        if (!handler)
+            return undefined;
+        return (e) => {
+            // `try/finally`, not a bare call. `handler` runs `preventDefault()`
+            // BEFORE it hands control to the consumer's `onNavigate`, so a router
+            // that throws synchronously (a route guard that raises, a rejected
+            // `push` surfaced inline) would otherwise skip the close and strand the
+            // drawer: focus-trapped, `body` scroll-locked, over a page that never
+            // changed, with only Escape to get out. MEDIUM, 2026-09-12 re-review.
+            try {
+                handler(e);
+            }
+            finally {
+                if (e.defaultPrevented)
+                    closeDrawer();
+            }
+        };
+    };
+    // Belt and braces to the `defaultPrevented` close above, and the only close
+    // path for a consumer that navigates WITHOUT going through a shell link (its
+    // own in-page link, a back button, a redirect).
     React.useEffect(() => {
         closeDrawer();
     }, [activePath, closeDrawer]);
@@ -423,18 +512,21 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
         productCodesFallback,
         catalog: PRODUCT_CATALOG,
     });
-    const railBody = (_jsxs(_Fragment, { children: [_jsx("a", { className: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandMarkR, {}) }), model.entitled.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Your products", children: [_jsx("p", { className: "rh-rail__heading", children: "Your products" }), _jsx("ul", { children: model.entitled.map((p) => (_jsx(EntitledRow, { p: p, activePath: activePath, currentProductCode: currentProductCode }, p.code))) })] })), _jsx("a", { className: "rh-row rh-row--all", href: ALL_PRODUCTS_HREF, children: "All products \u2192" }), _jsx("div", { className: "rh-rail__account", children: accountMenu ?? (_jsx(AccountMenu, { identity: identity, isStaff: isStaff, adminHref: adminHref, onSignOut: onSignOut })) })] }));
+    const railBody = (_jsxs(_Fragment, { children: [_jsx("a", { className: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", onClick: navOn(`${PORTAL_ORIGIN}/`), children: _jsx(BrandMarkR, {}) }), model.entitled.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Your products", children: [_jsx("p", { className: "rh-rail__heading", children: "Your products" }), _jsx("ul", { children: model.entitled.map((p) => (_jsx(EntitledRow, { p: p, activePath: activePath, currentProductCode: currentProductCode, navOn: navOn }, p.code))) })] })), _jsx("a", { className: "rh-row rh-row--all", href: ALL_PRODUCTS_HREF, onClick: navOn(ALL_PRODUCTS_HREF), children: "All products \u2192" }), _jsx("div", { className: "rh-rail__account", children: accountMenu ?? (_jsx(AccountMenu, { identity: identity, isStaff: isStaff, adminHref: adminHref, onSignOut: onSignOut, navOn: navOn })) })] }));
     return (_jsxs("div", { className: "rh-shell", children: [!isNarrow && (_jsx("aside", { className: "rh-rail", "aria-label": "RevHeat products", children: railBody })), drawer.isMounted && (_jsx(Drawer
             // Every open is a fresh Drawer — see `useDrawer`. Without the key,
             // reopening mid-exit reuses the instance and none of its mount work
             // (focus in, scroll lock) happens.
-            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", children: _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (_jsx("a", { className: "rh-banner__admin", href: adminHref, children: "Admin" }))] }), menuItems && (_jsx("nav", { className: "rh-menu", "aria-label": "Screens", children: menuItems.map((s) => (_jsx("a", { className: "rh-menu__tab", href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, onClick: onNavigate && !s.external && isSameOriginHref(s.href)
-                                ? (e) => {
-                                    if (isModifiedClick(e))
-                                        return;
-                                    e.preventDefault();
-                                    onNavigate(s.href);
-                                }
-                                : undefined, children: s.label }, s.href))) })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
+            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, onClick: navOn(ALL_PRODUCTS_HREF), children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", onClick: navOn(`${PORTAL_ORIGIN}/`), children: _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (
+                            /* Same href as the account menu's "Admin" item, so it gets the
+                               same treatment — one shell must not give one link two
+                               behaviours. `adminHref` is the only consumer-supplied href in
+                               the intercepted set, so it is also the only one that can be
+                               RELATIVE, i.e. same-origin in every app rather than just the
+                               portal. That is the documented contract (same origin + a
+                               navigate hook = route in-app), not an exception: all five
+                               React/Vue consumers pass an absolute app.revheat.com URL today
+                               and are unaffected. */
+                            _jsx("a", { className: "rh-banner__admin", href: adminHref, onClick: navOn(adminHref), children: "Admin" }))] }), menuItems && (_jsx("nav", { className: "rh-menu", "aria-label": "Screens", children: menuItems.map((s) => (_jsx("a", { className: "rh-menu__tab", href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, onClick: navOn(s.href, s.external), children: s.label }, s.href))) })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
 }
 //# sourceMappingURL=react.js.map

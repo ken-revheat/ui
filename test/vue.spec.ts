@@ -272,10 +272,17 @@ describe("navigation model (v2)", () => {
     });
     await nextTick();
     const menu = screen.getByRole("navigation", { name: "Screens" });
-    // A same-origin ABSOLUTE href is routed like a relative one…
+    // A same-origin ABSOLUTE href is routed like a relative one — and the
+    // hook is handed the IN-APP form, stripped of the origin. `href` still
+    // carries what the caller passed; only what reaches the navigate listener
+    // is normalised, because `router.push("http://localhost:3000/app/here")`
+    // is not a route in vue-router 4, it is a path called
+    // "/http:/localhost:3000/app/here" that warns "No match found".
     const same = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
-    within(menu).getByRole("link", { name: "Here" }).dispatchEvent(same);
-    expect(onNavigate).toHaveBeenCalledWith(here);
+    const hereLink = within(menu).getByRole("link", { name: "Here" });
+    expect(hereLink.getAttribute("href")).toBe(here);
+    hereLink.dispatchEvent(same);
+    expect(onNavigate).toHaveBeenCalledWith("/app/here");
     expect(same.defaultPrevented).toBe(true);
     // …while the off-origin one is not intercepted. Clicked last: the browser
     // follows it, and the page's origin is app.revheat.com from here on.
@@ -521,5 +528,394 @@ describe("drawer unmount race", () => {
     expect(document.body.style.overflow).toBe("");
     const evt = fireEvent.keyDown(document, { key: "Tab", cancelable: true });
     expect(evt).toBe(true); // not defaultPrevented — no orphan listener caught it
+  });
+});
+
+// ── v2.2.0 ──────────────────────────────────────────────────────────────
+// v2.1.0 wired the click-to-route hook to the screen tabs only. Inside the
+// portal EVERY link the shell renders is same-origin, so leaving the rail on
+// plain anchors meant adopting the shared shell would have traded the
+// portal's instant in-app navigation for a full page reload on every product
+// row, on "All products", on the R mark and on each account-menu item. The
+// same interception must never fire in a product app, where those same hrefs
+// are off-origin and MUST leave the app.
+describe("client-side navigation reaches the whole rail (v2.2)", () => {
+  // The portal is served FROM app.revheat.com — the one origin where the
+  // rail's own links are same-origin. afterEach puts the URL back.
+  const asPortal = () => {
+    window.location.href = "https://app.revheat.com/vault";
+  };
+
+  const clickPlain = (el: Element): MouseEvent => {
+    const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 });
+    el.dispatchEvent(ev);
+    return ev;
+  };
+
+  // `training_vault`'s catalog appUrl is https://app.revheat.com/vault — the
+  // one owned product the portal hosts itself.
+  const portalProducts = [
+    ...products,
+    {
+      code: "training_vault",
+      state: "launch" as const,
+      appUrl: "https://app.revheat.com/vault",
+      lockReason: null,
+      billingStatus: "active",
+    },
+  ];
+
+  const mountAsPortal = async (props: Record<string, unknown> = {}) => {
+    asPortal();
+    const onNavigate = vi.fn();
+    mountShell({
+      products: portalProducts,
+      activePath: "/vault",
+      currentProductCode: "training_vault",
+      onNavigate,
+      ...props,
+    });
+    await nextTick();
+    return onNavigate;
+  };
+
+  const rail = () => screen.getByRole("complementary", { name: "RevHeat products" });
+
+  it("routes a same-origin product row, handing the router a PATH not a URL", async () => {
+    const onNavigate = await mountAsPortal();
+    const row = within(rail()).getByRole("link", { name: "Training Vault" });
+    // The anchor keeps the absolute href — cmd-click and "copy link address"
+    // have to keep working, and outside the portal this href really is
+    // cross-origin.
+    expect(row.getAttribute("href")).toBe("https://app.revheat.com/vault?source=sidebar");
+    expect(clickPlain(row).defaultPrevented).toBe(true);
+    // …but the listener gets path+query. Absolute is not a no-op to
+    // vue-router 4: it resolves the whole string as a path and lands on
+    // "/https:/app.revheat.com/vault" with "No match found".
+    expect(onNavigate).toHaveBeenCalledWith("/vault?source=sidebar");
+    // The query survives on purpose — `?source=sidebar` is how the portal's
+    // upgrade page attributes the click.
+  });
+
+  it("routes All products, the R mark and the banner's ← Portal link", async () => {
+    const onNavigate = await mountAsPortal();
+    for (const el of [
+      within(rail()).getByRole("link", { name: "All products →" }),
+      rail().querySelector(".rh-rail__home")!,
+      document.querySelector(".rh-banner__portal")!,
+      document.querySelector(".rh-banner__brand")!,
+    ]) {
+      onNavigate.mockClear();
+      expect(clickPlain(el).defaultPrevented, el.className).toBe(true);
+      expect(onNavigate, el.className).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("routes the account-menu items but never Sign out", async () => {
+    const onNavigate = await mountAsPortal({ onSignOut: () => {} });
+    for (const label of ["Account settings", "Team & Access", "Manage products"]) {
+      // Reopened each pass: from v2.2.0 an in-app route CLOSES the pop-up
+      // (see the next test), so the menu is gone after the first click.
+      fireEvent.click(accountTrigger());
+      await nextTick();
+      onNavigate.mockClear();
+      const item = screen.getByRole("menuitem", { name: label });
+      expect(clickPlain(item).defaultPrevented, label).toBe(true);
+      expect(onNavigate, label).toHaveBeenCalledTimes(1);
+      await nextTick();
+    }
+    // Sign out must reach the server, so it is never routed. With a sign-out
+    // listener it is a BUTTON, and a button has no href to intercept.
+    fireEvent.click(accountTrigger());
+    await nextTick();
+    expect(screen.getByRole("menuitem", { name: "Sign out" }).tagName).toBe("BUTTON");
+  });
+
+  it("leaves Sign out a plain link in its ANCHOR form, where interception WOULD be possible", async () => {
+    // The other half of the test above, which used to claim this in a comment
+    // and never exercise it (LOW, 2026-09-12 re-review). With no sign-out
+    // listener the shell renders Sign out as an <a> to the portal's logout
+    // URL — which, inside the portal, is same-origin and therefore exactly
+    // the shape `shellNavHandler` would otherwise intercept. It must not:
+    // signing out is a server round-trip that clears a cookie, and routing it
+    // client-side would leave the user signed in on a logged-out page.
+    const onNavigate = await mountAsPortal();
+    fireEvent.click(accountTrigger());
+    await nextTick();
+    const signOut = screen.getByRole("menuitem", { name: "Sign out" });
+    expect(signOut.tagName).toBe("A");
+    expect(signOut.getAttribute("href")).toContain("/logout?next=");
+    expect(clickPlain(signOut).defaultPrevented).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("closes the account pop-up once a menu item routes in-app", async () => {
+    // Until v2.2.0 nothing ever closed this menu on its own: every item was a
+    // full page load, which took the whole DOM with it. Now the page survives
+    // the click, so the pop-up would sit open over the destination — and the
+    // trigger's aria-expanded would lie to a screen reader.
+    const onNavigate = await mountAsPortal({ onSignOut: () => {} });
+    fireEvent.click(accountTrigger());
+    await nextTick();
+    expect(screen.getByRole("menu")).toBeTruthy();
+    clickPlain(screen.getByRole("menuitem", { name: "Account settings" }));
+    await nextTick();
+    expect(onNavigate).toHaveBeenCalledWith("/account");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(accountTrigger().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("leaves the account pop-up open on a cmd-click, which opens a new tab", async () => {
+    // The close is keyed on `defaultPrevented`, not on "a handler exists" —
+    // a modified click is NOT a navigation of this page, so the menu the user
+    // is still looking at must stay put.
+    const onNavigate = await mountAsPortal({ onSignOut: () => {} });
+    fireEvent.click(accountTrigger());
+    await nextTick();
+    const item = screen.getByRole("menuitem", { name: "Account settings" });
+    const ev = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      button: 0,
+      metaKey: true,
+    });
+    item.dispatchEvent(ev);
+    await nextTick();
+    expect(ev.defaultPrevented).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.getByRole("menu")).toBeTruthy();
+  });
+
+  it("routes the banner's Admin link, including a RELATIVE adminHref", async () => {
+    // `adminHref` is the only consumer-supplied href in the intercepted set,
+    // so it is the only one that can be relative — and a relative href is
+    // same-origin in EVERY app, not just the portal. That is the contract
+    // (same origin + a navigate listener = route in-app), asserted here so
+    // nobody "fixes" it into an origin check against PORTAL_ORIGIN.
+    const onNavigate = await mountAsPortal({
+      identity: { ...member, isStaff: true },
+      adminHref: "/admin/orgs",
+    });
+    const link = document.querySelector<HTMLAnchorElement>(".rh-banner__admin")!;
+    expect(link.getAttribute("href")).toBe("/admin/orgs");
+    expect(clickPlain(link).defaultPrevented).toBe(true);
+    expect(onNavigate).toHaveBeenCalledWith("/admin/orgs");
+  });
+
+  it("leaves the banner's Admin link alone in a product app, where it is off-origin", async () => {
+    // No `asPortal()` — this is Call Analyzer / Directive on its own origin.
+    // Routing app.revheat.com/admin/orgs through THEIR router would land on
+    // their own 404. (happy-dom really follows the un-prevented click; the
+    // suite's afterEach puts the URL back.)
+    const onNavigate = vi.fn();
+    mountShell({
+      identity: { ...member, isStaff: true },
+      adminHref: "https://app.revheat.com/admin/orgs",
+      currentProductCode: "call_analyzer",
+      onNavigate,
+    });
+    await nextTick();
+    const link = document.querySelector<HTMLAnchorElement>(".rh-banner__admin")!;
+    expect(clickPlain(link).defaultPrevented).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("never intercepts modified clicks, so cmd/ctrl/middle-click still opens a new tab", async () => {
+    const onNavigate = await mountAsPortal();
+    const row = within(rail()).getByRole("link", { name: "Training Vault" });
+    for (const mod of [
+      { metaKey: true },
+      { ctrlKey: true },
+      { shiftKey: true },
+      { altKey: true },
+      { button: 1 },
+    ]) {
+      const ev = new MouseEvent("click", { bubbles: true, cancelable: true, button: 0, ...mod });
+      row.dispatchEvent(ev);
+      expect(ev.defaultPrevented, JSON.stringify(mod)).toBe(false);
+    }
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("without a navigate listener every rail link stays a plain browser link", async () => {
+    asPortal();
+    mountShell({ products: portalProducts, activePath: "/vault" });
+    await nextTick();
+    for (const el of [
+      within(rail()).getByRole("link", { name: "Training Vault" }),
+      within(rail()).getByRole("link", { name: "All products →" }),
+      rail().querySelector(".rh-rail__home")!,
+    ]) {
+      expect(clickPlain(el).defaultPrevented, el.className).toBe(false);
+    }
+  });
+
+  it("routes the banner's Admin link when it is the absolute portal URL", async () => {
+    // What all five product consumers actually pass. It is same-origin ONLY
+    // here, inside the portal. (Added in the v2.2.0 re-review — the React
+    // suite had this case and the Vue mirror did not.)
+    const onNavigate = await mountAsPortal({
+      identity: { ...member, isStaff: true },
+      adminHref: "https://app.revheat.com/admin/orgs",
+    });
+    const link = document.querySelector<HTMLAnchorElement>(".rh-banner__admin")!;
+    expect(clickPlain(link).defaultPrevented).toBe(true);
+    expect(onNavigate).toHaveBeenCalledWith("/admin/orgs");
+  });
+  it("closes the account pop-up even when the router THROWS", async () => {
+    // The `navItemOn` half of the guard the drawer tests pin for `navOn`.
+    // Round 3 (2026-09-12) deleted `navItemOn`'s try/finally and the whole
+    // suite stayed green — the code was right, nothing was watching it. Left
+    // unwatched, a pop-up that survives a throwing route guard sits over the
+    // page with focus trapped inside it and the trigger still reading
+    // aria-expanded="true".
+    const onNavigate = vi.fn(() => {
+      throw new Error("route guard says no");
+    });
+    await mountAsPortal({ onNavigate });
+    const trigger = accountTrigger();
+    // Focus the trigger the way a real click does — fireEvent does not.
+    trigger.focus();
+    fireEvent.click(trigger);
+    await nextTick();
+    // Same contract as the drawer test: how the listener's exception surfaces
+    // is the DOM implementation's business, the close is ours.
+    try {
+      clickPlain(screen.getByRole("menuitem", { name: "Account settings" }));
+    } catch {
+      /* the consumer's error, on whichever path it takes */
+    }
+    await nextTick();
+    expect(onNavigate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    // The React mirror also asserts focus is back on the trigger. Not asserted
+    // here, and it is the HARNESS not the shell: Vue removes the menu on the
+    // next tick, AFTER closeAndRefocus() has already focused the trigger, and
+    // happy-dom resets activeElement to <body> on that removal. Measured
+    // 2026-09-12 with the router NOT throwing either — same result — so this
+    // is not the throw path losing focus.
+  });
+
+
+  // ── the drawer ────────────────────────────────────────────────────────
+  // Mirror of test/shell.spec.tsx's "the drawer closes on an intercepted tap".
+  // REGRESSION found in the v2.2.0 re-review: through v2.1.0 a rail row was a
+  // plain browser link, so tapping one inside the drawer tore the document
+  // down and the drawer never needed a close of its own. v2.2.0 calls
+  // preventDefault on those same rows.
+  describe("the drawer closes on an intercepted tap", () => {
+    const menuButton = () => screen.getByRole("button", { name: "Open product menu" });
+
+    const openDrawer = async (props: Record<string, unknown> = {}) => {
+      setViewport(true);
+      const onNavigate = await mountAsPortal(props);
+      fireEvent.click(menuButton());
+      await nextTick();
+      return { onNavigate, drawer: screen.getByRole("dialog", { name: "RevHeat products" }) };
+    };
+
+    it("closes it when the row points at the page you are ALREADY on", async () => {
+      // The case the `activePath` watcher cannot cover: the shell is mounted
+      // at /vault and the row goes to /vault, so the consumer re-renders with
+      // the SAME path and the watcher never fires. Left unfixed the panel
+      // stays over the page focus-trapped and body-scroll-locked, and the tap
+      // looks like it did nothing.
+      const { onNavigate, drawer } = await openDrawer();
+      const row = within(drawer).getByRole("link", { name: "Training Vault" });
+      expect(clickPlain(row).defaultPrevented).toBe(true);
+      expect(onNavigate).toHaveBeenCalledWith("/vault?source=sidebar");
+      await nextTick();
+      // The panel stays MOUNTED for one exit animation by design, so "gone
+      // from the DOM" is the wrong question — what must be true immediately is
+      // that it has stopped being a modal holding the page.
+      expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+      expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBeNull();
+      expect(document.body.style.overflow).toBe("");
+    });
+
+    it("closes it on a row that DOES change the path, without waiting for the router", async () => {
+      const { drawer } = await openDrawer();
+      const row = within(drawer).getByRole("link", { name: "All products →" });
+      expect(clickPlain(row).defaultPrevented).toBe(true);
+      await nextTick();
+      expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+      expect(document.body.style.overflow).toBe("");
+    });
+
+    it("leaves it open on a cmd-click, which really does open a new tab", async () => {
+      // Same rule as the account pop-up: `defaultPrevented` is the signal, not
+      // "a handler ran". The user is staying on this page.
+      const { onNavigate, drawer } = await openDrawer();
+      const row = within(drawer).getByRole("link", { name: "Training Vault" });
+      const ev = new MouseEvent("click", {
+        bubbles: true,
+        cancelable: true,
+        button: 0,
+        metaKey: true,
+      });
+      row.dispatchEvent(ev);
+      await nextTick();
+      expect(ev.defaultPrevented).toBe(false);
+      expect(onNavigate).not.toHaveBeenCalled();
+      expect(menuButton().getAttribute("aria-expanded")).toBe("true");
+      expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBe("true");
+    });
+
+    it("closes BOTH the account pop-up and the drawer when a menu item inside the drawer routes", async () => {
+      // The only click path where two closers fire on one event: `navOn`'s
+      // closeDrawer() and the account menu's own closeAndRefocus(). Nothing
+      // pinned it before (MEDIUM, 2026-09-12 re-review) — every other
+      // account-menu test clicks the DESKTOP rail's copy. A refactor of
+      // either closer could leave the drawer up over the destination, or
+      // bounce focus somewhere the phone user cannot see.
+      const { onNavigate, drawer } = await openDrawer();
+      fireEvent.click(accountTrigger(drawer));
+      await nextTick();
+      clickPlain(screen.getByRole("menuitem", { name: "Account settings" }));
+      await nextTick();
+      expect(onNavigate).toHaveBeenCalledWith("/account");
+      expect(screen.queryByRole("menu")).toBeNull();
+      expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+      expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBeNull();
+      expect(document.body.style.overflow).toBe("");
+    });
+
+    it("closes even when the consumer's router THROWS on the way out", async () => {
+      // preventDefault() has already run by the time `navigate` is emitted, so
+      // a consumer whose router raises synchronously (a route guard that
+      // throws, a rejected push surfaced inline) used to skip the close and
+      // strand the panel: focus-trapped, body scroll-locked, over a page that
+      // never changed. `try/finally` in navOn is what makes this pass.
+      // MEDIUM, 2026-09-12 re-review.
+      const onNavigate = vi.fn(() => {
+        throw new Error("route guard says no");
+      });
+      const { drawer } = await openDrawer({ onNavigate });
+      const row = within(drawer).getByRole("link", { name: "Training Vault" });
+      // Deliberately does not assert HOW the error surfaces — a listener
+      // exception may be rethrown out of dispatchEvent or reported to the
+      // window, and which one is the DOM implementation's business. What this
+      // test owns is that the drawer did not survive it either way.
+      try {
+        clickPlain(row);
+      } catch {
+        /* the consumer's error, on whichever path it takes */
+      }
+      await nextTick();
+      expect(onNavigate).toHaveBeenCalledTimes(1);
+      expect(menuButton().getAttribute("aria-expanded")).toBe("false");
+      expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBeNull();
+      expect(document.body.style.overflow).toBe("");
+    });
+  });
+
+  // Clicked last on purpose: happy-dom really follows an un-prevented anchor,
+  // which moves the document's origin for everything after it.
+  it("leaves an off-origin product row to the browser", async () => {
+    const onNavigate = await mountAsPortal();
+    const row = within(rail()).getByRole("link", { name: "Trend Finder" });
+    expect(clickPlain(row).defaultPrevented).toBe(false);
+    expect(onNavigate).not.toHaveBeenCalled();
   });
 });

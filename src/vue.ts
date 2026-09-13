@@ -25,7 +25,12 @@ import {
   type ShellScreen,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
-import { isModifiedClick, isSameOriginHref } from "./internal.js";
+import { shellNavHandler } from "./internal.js";
+
+/** Builds the onClick for one shell link, or undefined for a plain link.
+ *  `navigate` is AppShell's `navigate` emit, already narrowed to undefined
+ *  when the consumer attached no listener. */
+type NavOn = (href: string, external?: boolean) => ((e: MouseEvent) => void) | undefined;
 
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue), the
 // `@media (max-width: 900px)` rule in styles.css, and `src/react.tsx`'s
@@ -207,6 +212,7 @@ function entitledRowVNode(
   p: RailProduct,
   activePath: string,
   currentProductCode: string | undefined,
+  navOn: NavOn,
 ): VNode {
   const href = withSource(p.appUrl);
   const active = isActiveProduct(p, activePath, currentProductCode);
@@ -216,7 +222,12 @@ function entitledRowVNode(
   return h("li", { class: "rh-rail__item", key: p.code }, [
     h(
       "a",
-      { class: "rh-rail__link", href, "aria-current": active ? "page" : undefined },
+      {
+        class: "rh-rail__link",
+        href,
+        "aria-current": active ? "page" : undefined,
+        onClick: navOn(href),
+      },
       [
         h("span", { class: "rh-rail__tile", "aria-hidden": "true" }, productIcon(p.code)),
         h("span", { class: "rh-rail__label" }, p.title),
@@ -262,6 +273,11 @@ const RhAccountMenu = defineComponent({
     // have an onSignOut listener" is only knowable from AppShell's own
     // instance (see `hasSignOut` in AppShell's setup below).
     hasSignOut: { type: Boolean, default: false },
+    // AppShell's link-interception factory (see NavOn). Passed down rather
+    // than recomputed here for the same reason as `hasSignOut`: only
+    // AppShell's own instance knows whether the consumer attached a
+    // `navigate` listener.
+    navOn: { type: Function as PropType<NavOn>, required: true },
   },
   emits: ["sign-out"],
   setup(props, { emit }) {
@@ -359,6 +375,31 @@ const RhAccountMenu = defineComponent({
       }
     }
 
+    /**
+     * A menu item that routes in-app has to close the menu itself. The only
+     * thing that closed it before was an OUTSIDE pointerdown, and a click on
+     * an item is inside — it worked purely because the click was a full page
+     * load and the document went away with it. Once v2.2.0 calls
+     * preventDefault, the pop-up stays open over the page the user just
+     * navigated to, with focus still on the item they clicked.
+     *
+     * `defaultPrevented` is the signal, not "the handler exists": a cmd-click
+     * returns early from the handler and really does open a new tab, and the
+     * menu must still be there when the user comes back to this one.
+     */
+    function navItemOn(href: string) {
+      const handler = props.navOn(href);
+      if (!handler) return undefined;
+      return (e: MouseEvent) => {
+        // `try/finally` for the same reason as `navOn` — see the note there.
+        try {
+          handler(e);
+        } finally {
+          if (e.defaultPrevented) closeAndRefocus();
+        }
+      };
+    }
+
     return () => {
       const initial = (props.identity.email ?? "?").charAt(0).toUpperCase();
       const items = accountItemsFor(props.isStaff, props.adminHref);
@@ -386,6 +427,11 @@ const RhAccountMenu = defineComponent({
                       role: "menuitem",
                       tabindex: -1,
                       href: item.href,
+                      // Client-side inside the portal (these all point at
+                      // app.revheat.com); a real link everywhere else.
+                      // Sign-out is deliberately NOT in this list — it must
+                      // hit the server.
+                      onClick: navItemOn(item.href),
                     },
                     item.label,
                   ),
@@ -642,9 +688,69 @@ export const AppShell = defineComponent({
     // vnode props at render time.
     const instance = getCurrentInstance();
     const hasSignOut = () => Boolean(instance?.vnode.props?.["onSignOut"]);
-    // Same trick for `navigate`: only intercept screen-tab clicks when the
-    // app actually listens (`@navigate`); otherwise tabs stay plain links.
+    // Same trick for `navigate`: only intercept a click when the app actually
+    // listens (`@navigate`); otherwise every link stays a plain link.
+    //
+    // ⚠️ As of v2.2.0 "a click" means every same-origin link the shell
+    // renders — the rail's home link, the product rows, "All products →", the
+    // account menu and Admin — not only the screen tabs it meant through
+    // v2.1.0. The href handed to the listener is normalised to
+    // path + search + hash against the document's base URL, never the raw
+    // attribute. Kept in step with the React prop's doc in src/react.tsx.
     const hasNavigate = () => Boolean(instance?.vnode.props?.["onNavigate"]);
+    // One factory, used by every link the shell renders. Defined once in
+    // `setup`, which is correct and costs nothing: each CALL runs
+    // `shellNavHandler` afresh, so the same-origin decision is retaken on
+    // every render regardless of when this function was created.
+    //
+    // (Through v2.1.0 the comment here claimed the factory had to be
+    // recomputed per render because `isSameOriginHref` reads `document`.
+    // That was wrong — the check lives in the call, not in the closure — and
+    // it mis-describes the code, which never recreated it per render. SSR is
+    // safe because of `isSameOriginHref`'s own `typeof document` guard.)
+    //
+    // ⛔ An intercepted click MUST close the drawer, and the `activePath`
+    // watcher below is not enough to do it. Mirrors src/react.tsx's `navOn`
+    // — read the long note there for the full case; the short version:
+    // through v2.1.0 a rail row inside the drawer tore the document down, so
+    // the drawer could not survive its own links. Now that the same rows call
+    // `preventDefault`, a row pointing at the page you are ALREADY on (inside
+    // the portal: "All products →", the R-mark, the Training Vault row — all
+    // same-origin, all intercepted) never changes `activePath`, so the panel
+    // stays up focus-trapped and scroll-locked and the tap looks inert.
+    // `defaultPrevented` is the signal, so a modified click still opens its
+    // new tab and leaves the drawer alone; `closeDrawer()` is a no-op unless
+    // the phase is "open", so wide-viewport rail clicks pay nothing.
+    //
+    // `closeDrawer` is declared below as a hoisted `function`, and is only
+    // ever CALLED at click time, so the forward reference is safe.
+    const navOn: NavOn = (href, external) => {
+      const handler = shellNavHandler<MouseEvent>(
+        href,
+        hasNavigate() ? (h2) => emit("navigate", h2) : undefined,
+        external,
+      );
+      if (!handler) return undefined;
+      return (e: MouseEvent) => {
+        // `try/finally`, not a bare call. `handler` runs `preventDefault()`
+        // BEFORE it emits `navigate`, so a consumer whose router throws
+        // synchronously would otherwise skip the close and strand the drawer:
+        // focus-trapped, `body` scroll-locked, over a page that never changed,
+        // with only Escape to get out. MEDIUM, 2026-09-12 re-review.
+        //
+        // Narrower here than on the React side, and deliberately kept anyway:
+        // Vue routes a listener's throw through `callWithAsyncErrorHandling`,
+        // which RE-THROWS in a dev build but only `console.error`s in a
+        // production one — so in a shipped app the exception usually never
+        // reaches this `finally` and the drawer would have closed regardless.
+        // It still matters in dev, it matches React, and it costs nothing.
+        try {
+          handler(e);
+        } finally {
+          if (e.defaultPrevented) closeDrawer();
+        }
+      };
+    };
 
     const isNarrow = ref(false);
     let mq: MediaQueryList | null = null;
@@ -707,9 +813,9 @@ export const AppShell = defineComponent({
       if (exitTimer) clearTimeout(exitTimer);
     });
 
-    // The portal only closes its drawer from rows that emit `navigate`, so
-    // its own "RevHeat home" link leaves the menu sitting open over the new
-    // page.
+    // Belt and braces to the `defaultPrevented` close in `navOn`, and the only
+    // close path for a consumer that navigates WITHOUT going through a shell
+    // link (its own in-page link, a back button, a redirect).
     watch(() => props.activePath, () => closeDrawer());
     // Widening past the breakpoint puts the real rail back; leaving the
     // drawer up would stack two copies of it.
@@ -747,7 +853,16 @@ export const AppShell = defineComponent({
 
       function railBody(): (VNode | null)[] {
         return [
-          h("a", { class: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home" }, brandMarkR()),
+          h(
+            "a",
+            {
+              class: "rh-rail__home",
+              href: `${PORTAL_ORIGIN}/`,
+              "aria-label": "RevHeat home",
+              onClick: navOn(`${PORTAL_ORIGIN}/`),
+            },
+            brandMarkR(),
+          ),
           model.entitled.length > 0
             ? h("nav", { class: "rh-rail__section", "aria-label": "Your products" }, [
                 h("p", { class: "rh-rail__heading" }, "Your products"),
@@ -755,12 +870,20 @@ export const AppShell = defineComponent({
                   "ul",
                   {},
                   model.entitled.map((p) =>
-                    entitledRowVNode(p, props.activePath, props.currentProductCode),
+                    entitledRowVNode(p, props.activePath, props.currentProductCode, navOn),
                   ),
                 ),
               ])
             : null,
-          h("a", { class: "rh-row rh-row--all", href: ALL_PRODUCTS_HREF }, "All products →"),
+          h(
+            "a",
+            {
+              class: "rh-row rh-row--all",
+              href: ALL_PRODUCTS_HREF,
+              onClick: navOn(ALL_PRODUCTS_HREF),
+            },
+            "All products →",
+          ),
           h("div", { class: "rh-rail__account" }, [
             slots["account-menu"]
               ? slots["account-menu"]!()
@@ -769,6 +892,7 @@ export const AppShell = defineComponent({
                   isStaff,
                   adminHref: props.adminHref,
                   hasSignOut: hasSignOut(),
+                  navOn,
                   onSignOut: () => emit("sign-out"),
                 }),
           ]),
@@ -815,13 +939,23 @@ export const AppShell = defineComponent({
                 },
                 strokeIcon(MENU_ICON, "rh-banner__menu-glyph"),
               ),
-              h("a", { class: "rh-banner__portal", href: ALL_PRODUCTS_HREF }, [
-                h("span", { "aria-hidden": "true" }, "←"),
-                " Portal",
-              ]),
               h(
                 "a",
-                { class: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home" },
+                {
+                  class: "rh-banner__portal",
+                  href: ALL_PRODUCTS_HREF,
+                  onClick: navOn(ALL_PRODUCTS_HREF),
+                },
+                [h("span", { "aria-hidden": "true" }, "←"), " Portal"],
+              ),
+              h(
+                "a",
+                {
+                  class: "rh-banner__brand",
+                  href: `${PORTAL_ORIGIN}/`,
+                  "aria-label": "RevHeat home",
+                  onClick: navOn(`${PORTAL_ORIGIN}/`),
+                },
                 brandWordmark(),
               ),
               title !== undefined ? h("span", { class: "rh-banner__product" }, title) : null,
@@ -830,7 +964,24 @@ export const AppShell = defineComponent({
               ? h("div", { class: "rh-banner__actions" }, slots["header-actions"]!())
               : null,
             isStaff && props.adminHref
-              ? h("a", { class: "rh-banner__admin", href: props.adminHref }, "Admin")
+              ? // Same href as the account menu's "Admin" item, so it gets the
+                // same treatment — one shell must not give one link two
+                // behaviours. `adminHref` is the only consumer-supplied href in
+                // the intercepted set, so it is also the only one that can be
+                // RELATIVE, i.e. same-origin in every app rather than just the
+                // portal. That is the documented contract (same origin + a
+                // navigate hook = route in-app), not an exception: all five
+                // React/Vue consumers pass an absolute app.revheat.com URL
+                // today and are unaffected.
+                h(
+                  "a",
+                  {
+                    class: "rh-banner__admin",
+                    href: props.adminHref,
+                    onClick: navOn(props.adminHref),
+                  },
+                  "Admin",
+                )
               : null,
           ]),
           menuItems
@@ -846,14 +997,7 @@ export const AppShell = defineComponent({
                       href: s.href,
                       "aria-current": s.active ? "page" : undefined,
                       rel: s.external ? "noopener noreferrer" : undefined,
-                      onClick:
-                        hasNavigate() && !s.external && isSameOriginHref(s.href)
-                          ? (e: MouseEvent) => {
-                              if (isModifiedClick(e)) return;
-                              e.preventDefault();
-                              emit("navigate", s.href);
-                            }
-                          : undefined,
+                      onClick: navOn(s.href, s.external),
                     },
                     s.label,
                   ),

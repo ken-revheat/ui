@@ -15,7 +15,15 @@ import {
   type ShellScreen,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
-import { isModifiedClick, isSameOriginHref } from "./internal.js";
+import { shellNavHandler } from "./internal.js";
+
+/** Builds the onClick for one shell link, or undefined for a plain link.
+ *  See `shellNavHandler` — this is that decision, curried with the
+ *  consumer's `onNavigate` (absent when they did not opt in). */
+type NavOn = (
+  href: string,
+  external?: boolean,
+) => ((e: React.MouseEvent<HTMLAnchorElement>) => void) | undefined;
 
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue) and the existing
 // `@media (max-width: 900px)` rule in styles.css. A raw px query on purpose —
@@ -89,13 +97,28 @@ export interface AppShellProps {
   /** Horizontal in-product screen menu. Rendered only when 2+ items. */
   screens?: ShellScreen[];
   /**
-   * Client-side navigation hook for the screen menu. When present, a plain
-   * left-click on a non-external tab is intercepted (`preventDefault`) and
-   * `onNavigate(href)` is called instead of letting the browser load the
-   * page — wire it to your router's push. Modified clicks (⌘/ctrl/shift/alt,
-   * middle button) and `external: true` tabs keep the browser's default so
-   * open-in-new-tab still works, and so does an off-origin href that forgot
-   * `external: true`. Omit it and tabs are plain links.
+   * Client-side navigation hook. When present, a plain left-click on a
+   * same-origin link is intercepted (`preventDefault`) and `onNavigate(href)`
+   * is called instead of letting the browser load the page — wire it to your
+   * router's push.
+   *
+   * ⚠️ As of v2.2.0 this is the WHOLE shell, not just the screen menu: the
+   * rail's home link, every entitled product row, "All products →", the
+   * account menu's items and the staff Admin link all route through it too.
+   * Before v2.2.0 only the screen tabs did, and everything else was a full
+   * page load. If your handler assumes it only ever sees a screen tab's href,
+   * that assumption broke here.
+   *
+   * The href you receive is normalised, never the raw attribute: it is
+   * resolved against the document's base URL and handed back as
+   * path + search + hash. So an absolute same-origin href loses its origin, a
+   * document-relative one is resolved (against `<base href>` if you ship
+   * one), and a hash-only one keeps the current path AND query string.
+   *
+   * Modified clicks (⌘/ctrl/shift/alt, middle button) and `external: true`
+   * tabs keep the browser's default so open-in-new-tab still works, and so
+   * does an off-origin href that forgot `external: true`. Omit the prop and
+   * every one of these is a plain link.
    *
    * This is a function prop: whatever renders `<AppShell onNavigate>` must
    * itself be a Client Component ("use client") — a Server Component cannot
@@ -307,10 +330,12 @@ function EntitledRow({
   p,
   activePath,
   currentProductCode,
+  navOn,
 }: {
   p: RailProduct;
   activePath: string;
   currentProductCode?: string;
+  navOn: NavOn;
 }) {
   const href = withSource(p.appUrl);
   const active = isActiveProduct(p, activePath, currentProductCode);
@@ -319,7 +344,12 @@ function EntitledRow({
     // and what a screen reader announces. No parallel `--active` class: an
     // emitted class with no rule behind it is a trap for the next reader.
     <li className="rh-rail__item">
-      <a className="rh-rail__link" href={href} aria-current={active ? "page" : undefined}>
+      <a
+        className="rh-rail__link"
+        href={href}
+        aria-current={active ? "page" : undefined}
+        onClick={navOn(href)}
+      >
         <span className="rh-rail__tile" aria-hidden>
           <ProductIcon code={p.code} />
         </span>
@@ -338,6 +368,7 @@ interface AccountMenuProps {
   isStaff: boolean;
   adminHref?: string;
   onSignOut?: () => void;
+  navOn: NavOn;
 }
 
 // Same items, same order and same destinations as the portal's own account menu
@@ -361,7 +392,7 @@ function accountItemsFor(isStaff: boolean, adminHref?: string) {
   return items;
 }
 
-function AccountMenu({ identity, isStaff, adminHref, onSignOut }: AccountMenuProps) {
+function AccountMenu({ identity, isStaff, adminHref, onSignOut, navOn }: AccountMenuProps) {
   const [open, setOpen] = React.useState(false);
   const menuId = React.useId();
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -455,6 +486,31 @@ function AccountMenu({ identity, isStaff, adminHref, onSignOut }: AccountMenuPro
     setOpen(true);
   };
 
+  /**
+   * A menu item that routes in-app has to close the menu itself. The only
+   * thing that closed it before was an OUTSIDE pointerdown, and a click on an
+   * item is inside — it worked purely because the click was a full page load
+   * and the document went away with it. Once v2.2.0 calls preventDefault, the
+   * pop-up stays open over the page the user just navigated to, with focus
+   * still on the item they clicked.
+   *
+   * `defaultPrevented` is the signal, not "the handler exists": a cmd-click
+   * returns early from the handler and really does open a new tab, and the
+   * menu must still be there when the user comes back to this one.
+   */
+  const navItemOn = (href: string) => {
+    const handler = navOn(href);
+    if (!handler) return undefined;
+    return (e: React.MouseEvent<HTMLAnchorElement>) => {
+      // `try/finally` for the same reason as `navOn` — see the note there.
+      try {
+        handler(e);
+      } finally {
+        if (e.defaultPrevented) closeAndRefocus();
+      }
+    };
+  };
+
   return (
     <div className="rh-rail__account-menu" ref={rootRef}>
       {open && (
@@ -478,6 +534,10 @@ function AccountMenu({ identity, isStaff, adminHref, onSignOut }: AccountMenuPro
               role="menuitem"
               tabIndex={-1}
               href={item.href}
+              /* Client-side inside the portal (these all point at
+                 app.revheat.com); a real link everywhere else. Sign-out is
+                 deliberately NOT in this list — it must hit the server. */
+              onClick={navItemOn(item.href)}
             >
               {item.label}
             </a>
@@ -708,10 +768,71 @@ export function AppShell({
   const isNarrow = useIsNarrow();
   const drawer = useDrawer();
   const drawerId = React.useId();
+
   const { close: closeDrawer, dismiss: dismissDrawer } = drawer;
 
-  // The portal only closes its drawer from rows that emit `navigate`, so its
-  // own "RevHeat home" link leaves the menu sitting open over the new page.
+  // One factory, used by every link the shell renders. Not memoized, because
+  // memoizing it would buy nothing: `useCallback` would stabilise only THIS
+  // function's identity, while every CALL still runs `shellNavHandler` and so
+  // re-reads `document` — the same-origin decision and the handler handed to
+  // each anchor are recomputed per render either way.
+  //
+  // (Through v2.1.0 the comment here claimed the non-memoization was what
+  // allowed the same-origin decision to be retaken after hydration. That was
+  // wrong — the check lives in the call, not in the closure — and it would
+  // have talked the next reader out of a memoization that is harmless. The
+  // reason SSR is safe is `isSameOriginHref`'s own `typeof document` guard.)
+  /**
+   * ⛔ An intercepted click MUST close the drawer, and the `activePath` effect
+   * below is not enough to do it.
+   *
+   * Through v2.1.0 every rail row was a plain browser link, so tapping one
+   * inside the drawer tore the whole document down — the drawer could not
+   * survive its own links. v2.2.0 calls `preventDefault` on the same rows, and
+   * nothing was left to close it: the panel stays up, focus-trapped and
+   * body-scroll-locked, over the page the router just moved to.
+   *
+   * The `activePath` effect only fires when the consumer re-renders with a NEW
+   * path, so it covers neither of the two cases that matter most:
+   *   - a row pointing at the page you are already on (inside the portal that
+   *     is "All products →" on the portal home, the R-mark, and the Training
+   *     Vault row — every one of them same-origin, so every one intercepted).
+   *     `activePath` never changes, so the drawer never closes at all and the
+   *     tap looks like it did nothing. Tapping again also does nothing; only
+   *     Escape, the close button or the backdrop gets the user out.
+   *   - a row pointing somewhere else, for the whole length of the router's
+   *     async transition rather than on the tap.
+   *
+   * `defaultPrevented` is the signal, exactly as it is for the account pop-up
+   * (`navItemOn`): a modified click returns early from the handler, really does
+   * open a new tab, and must leave the drawer where it was. `close()` is a
+   * no-op unless the phase is "open", so wide-viewport rail clicks pay nothing.
+   */
+  const navOn: NavOn = (href, external) => {
+    const handler = shellNavHandler<React.MouseEvent<HTMLAnchorElement>>(
+      href,
+      onNavigate,
+      external,
+    );
+    if (!handler) return undefined;
+    return (e) => {
+      // `try/finally`, not a bare call. `handler` runs `preventDefault()`
+      // BEFORE it hands control to the consumer's `onNavigate`, so a router
+      // that throws synchronously (a route guard that raises, a rejected
+      // `push` surfaced inline) would otherwise skip the close and strand the
+      // drawer: focus-trapped, `body` scroll-locked, over a page that never
+      // changed, with only Escape to get out. MEDIUM, 2026-09-12 re-review.
+      try {
+        handler(e);
+      } finally {
+        if (e.defaultPrevented) closeDrawer();
+      }
+    };
+  };
+
+  // Belt and braces to the `defaultPrevented` close above, and the only close
+  // path for a consumer that navigates WITHOUT going through a shell link (its
+  // own in-page link, a back button, a redirect).
   React.useEffect(() => {
     closeDrawer();
   }, [activePath, closeDrawer]);
@@ -751,7 +872,12 @@ export function AppShell({
 
   const railBody = (
     <>
-      <a className="rh-rail__home" href={`${PORTAL_ORIGIN}/`} aria-label="RevHeat home">
+      <a
+        className="rh-rail__home"
+        href={`${PORTAL_ORIGIN}/`}
+        aria-label="RevHeat home"
+        onClick={navOn(`${PORTAL_ORIGIN}/`)}
+      >
         <BrandMarkR />
       </a>
 
@@ -765,13 +891,18 @@ export function AppShell({
                 p={p}
                 activePath={activePath}
                 currentProductCode={currentProductCode}
+                navOn={navOn}
               />
             ))}
           </ul>
         </nav>
       )}
 
-      <a className="rh-row rh-row--all" href={ALL_PRODUCTS_HREF}>
+      <a
+        className="rh-row rh-row--all"
+        href={ALL_PRODUCTS_HREF}
+        onClick={navOn(ALL_PRODUCTS_HREF)}
+      >
         All products →
       </a>
 
@@ -782,6 +913,7 @@ export function AppShell({
             isStaff={isStaff}
             adminHref={adminHref}
             onSignOut={onSignOut}
+            navOn={navOn}
           />
         )}
       </div>
@@ -832,10 +964,19 @@ export function AppShell({
             >
               <StrokeIcon className="rh-banner__menu-glyph" d={MENU_ICON} />
             </button>
-            <a className="rh-banner__portal" href={ALL_PRODUCTS_HREF}>
+            <a
+              className="rh-banner__portal"
+              href={ALL_PRODUCTS_HREF}
+              onClick={navOn(ALL_PRODUCTS_HREF)}
+            >
               <span aria-hidden>←</span> Portal
             </a>
-            <a className="rh-banner__brand" href={`${PORTAL_ORIGIN}/`} aria-label="RevHeat home">
+            <a
+              className="rh-banner__brand"
+              href={`${PORTAL_ORIGIN}/`}
+              aria-label="RevHeat home"
+              onClick={navOn(`${PORTAL_ORIGIN}/`)}
+            >
               <BrandWordmark />
             </a>
             {title !== undefined && <span className="rh-banner__product">{title}</span>}
@@ -844,7 +985,16 @@ export function AppShell({
             <div className="rh-banner__actions">{headerActions}</div>
           )}
           {isStaff && adminHref && (
-            <a className="rh-banner__admin" href={adminHref}>
+            /* Same href as the account menu's "Admin" item, so it gets the
+               same treatment — one shell must not give one link two
+               behaviours. `adminHref` is the only consumer-supplied href in
+               the intercepted set, so it is also the only one that can be
+               RELATIVE, i.e. same-origin in every app rather than just the
+               portal. That is the documented contract (same origin + a
+               navigate hook = route in-app), not an exception: all five
+               React/Vue consumers pass an absolute app.revheat.com URL today
+               and are unaffected. */
+            <a className="rh-banner__admin" href={adminHref} onClick={navOn(adminHref)}>
               Admin
             </a>
           )}
@@ -858,15 +1008,7 @@ export function AppShell({
                 href={s.href}
                 aria-current={s.active ? "page" : undefined}
                 rel={s.external ? "noopener noreferrer" : undefined}
-                onClick={
-                  onNavigate && !s.external && isSameOriginHref(s.href)
-                    ? (e) => {
-                        if (isModifiedClick(e)) return;
-                        e.preventDefault();
-                        onNavigate(s.href);
-                      }
-                    : undefined
-                }
+                onClick={navOn(s.href, s.external)}
               >
                 {s.label}
               </a>
