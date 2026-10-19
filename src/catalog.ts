@@ -49,7 +49,9 @@ export const PRODUCT_CATALOG: ProductDef[] = [
     appUrl: "https://coach.revheat.com/app" },
   { code: "quotafit", slug: "quotafit", title: "QuotaFit",
     description: "Sales-hire fit — role scorecards your panel scores blind, then the places they disagreed.",
-    appUrl: "https://hire.revheat.com/app" },
+    // Blocked for customers 2026-10-19 (Ken). Already public, so this is a
+    // withdrawal, not a pre-launch entry. Mirrors launched:false in the API.
+    appUrl: "https://hire.revheat.com/app", unlaunched: true },
   { code: "training_vault", slug: "training-vault", title: "Training Vault",
     description: "Your sales team's training library — 12 modules of video coaching, scripts, and worksheets.",
     appUrl: "https://app.revheat.com/vault", internal: true },
@@ -58,7 +60,8 @@ export const PRODUCT_CATALOG: ProductDef[] = [
     appUrl: "https://trendfinder.revheat.com/app" },
   { code: "readiness_audit", slug: "readiness-audit", title: "Website Readiness Audit",
     description: "Score your website on what moves revenue — with a prioritized fix list, assigned by owner.",
-    appUrl: "https://readiness.revheat.com/app" },
+    // Blocked for customers 2026-10-19 (Ken). Already public; mirrors launched:false.
+    appUrl: "https://readiness.revheat.com/app", unlaunched: true },
   { code: "sell_playbook_consulting", slug: "sell-playbook-consulting", title: "Sell Playbook (Consulting)",
     description: "A consulting engagement, staff-arranged only.",
     appUrl: "https://app.revheat.com", unlaunched: true, consultingOnly: true },
