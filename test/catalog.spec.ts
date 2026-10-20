@@ -9,9 +9,9 @@ describe("PRODUCT_CATALOG", () => {
     expect(findProductByCode("all_access")?.isBundle).toBe(true);
     expect(findProductByCode("training_vault")?.internal).toBe(true);
   });
-  it("marks only sell_playbook_consulting unlaunched (trend_finder launched 2026-07-22)", () => {
+  it("marks quotafit, readiness_audit (blocked for customers 2026-10-19) and sell_playbook_consulting unlaunched", () => {
     const unlaunched = PRODUCT_CATALOG.filter((p) => p.unlaunched).map((p) => p.code);
-    expect(unlaunched).toEqual(["sell_playbook_consulting"]);
+    expect(unlaunched).toEqual(["quotafit", "readiness_audit", "sell_playbook_consulting"]);
   });
   it("marks only sell_playbook_consulting consultingOnly (never on a self-serve sidebar)", () => {
     const consulting = PRODUCT_CATALOG.filter((p) => p.consultingOnly).map((p) => p.code);
