@@ -9,12 +9,13 @@ import {
   PORTAL_ORIGIN,
   ALL_PRODUCTS_HREF,
   productTitle,
-  resolveActiveScreen,
+  resolveShellNavigation,
   type MeProduct,
   type RailProduct,
   type ShellScreen,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
+import { LEDGER_BRAND } from "./ledger-brand.js";
 import { shellNavHandler } from "./internal.js";
 
 /** Builds the onClick for one shell link, or undefined for a plain link.
@@ -96,6 +97,11 @@ export interface AppShellProps {
   adminHref?: string;
   /** Horizontal in-product screen menu. Rendered only when 2+ items. */
   screens?: ShellScreen[];
+  /** Opt-in Ledger presentation. Defaults preserve existing products. */
+  appearance?: "classic" | "ledger";
+  /** Consumer-filtered navigation; does not grant access or infer roles. */
+  primaryAction?: ShellScreen;
+  utilityScreens?: ShellScreen[];
   /**
    * Client-side navigation hook. When present, a plain left-click on a
    * same-origin link is intercepted (`preventDefault`) and `onNavigate(href)`
@@ -281,6 +287,13 @@ const CHEVRON_ICON = ["m6 9 6 6 6-6"];
 
 // The RevHeat "R" letterform mark (currentColor) — rail head, replacing the old
 // text link. Geometry ported verbatim from the design-tokens wordmark R glyph.
+function LedgerBrand({ kind, className }: { kind: "wordmark" | "icon"; className: string }) {
+  const asset = LEDGER_BRAND[kind];
+  return <svg className={className} viewBox={asset.viewBox} role="img" aria-label="RevHeat">
+    {asset.shapes.map((shape, index) => React.createElement(shape.tag, { ...shape.attrs, key: index }))}
+  </svg>;
+}
+
 function BrandMarkR() {
   return (
     <svg
@@ -602,7 +615,9 @@ function Drawer({
   closing,
   onClose,
   children,
+  appearance,
 }: {
+  appearance: "classic" | "ledger";
   id: string;
   closing: boolean;
   onClose: () => void;
@@ -706,8 +721,9 @@ function Drawer({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [closing, onClose]);
 
+  // Panel tabIndex keeps dead-space clicks focused inside the drawer.
   const tree = (
-    <div className={`rh-drawer${closing ? " rh-drawer--closing" : ""}`}>
+    <div className={`rh-drawer${closing ? " rh-drawer--closing" : ""}`} data-rh-appearance={appearance}>
       <div className="rh-drawer__scrim" onClick={onClose} aria-hidden />
       <div
         className="rh-drawer__panel rh-rail rh-rail--drawer"
@@ -719,9 +735,6 @@ function Drawer({
         aria-modal={closing ? undefined : "true"}
         aria-label="RevHeat products"
         ref={panelRef}
-        // Clicking dead space inside the panel keeps focus on the panel rather
-        // than dropping it to <body>. The document-level handlers above cope
-        // either way; this keeps the focus ring somewhere sensible.
         tabIndex={-1}
       >
         <button
@@ -759,6 +772,9 @@ export function AppShell({
   currentProductCode,
   adminHref,
   screens,
+  appearance = "classic",
+  primaryAction,
+  utilityScreens = [],
   onNavigate,
   headerActions,
   accountMenu,
@@ -846,7 +862,9 @@ export function AppShell({
 
   const isStaff = identity.isStaff ?? identity.isInternal;
   const title = productTitle(currentProductCode, PRODUCT_CATALOG);
-  const menuItems = screens && screens.length >= 2 ? resolveActiveScreen(screens, activePath) : null;
+  const navigation = resolveShellNavigation(screens ?? [], primaryAction, utilityScreens, activePath);
+  const menuItems = screens && (screens.length >= 2 || primaryAction) ? navigation.screens : [];
+  const mobileAction = appearance === "ledger" && isNarrow;
 
   const model = buildRailModel({
     me: degraded
@@ -870,6 +888,13 @@ export function AppShell({
     catalog: PRODUCT_CATALOG,
   });
 
+  function screenLink(s: ShellScreen, className: string) {
+    return <a key={s.href} className={className} href={s.href}
+      aria-current={s.active ? "page" : undefined}
+      rel={s.external ? "noopener noreferrer" : undefined}
+      onClick={navOn(s.href, s.external)}>{s.label}</a>;
+  }
+
   const railBody = (
     <>
       <a
@@ -878,7 +903,7 @@ export function AppShell({
         aria-label="RevHeat home"
         onClick={navOn(`${PORTAL_ORIGIN}/`)}
       >
-        <BrandMarkR />
+        {appearance === "ledger" ? <LedgerBrand kind="icon" className="rh-rail__mark" /> : <BrandMarkR />}
       </a>
 
       {model.entitled.length > 0 && (
@@ -921,7 +946,7 @@ export function AppShell({
   );
 
   return (
-    <div className="rh-shell">
+    <div className="rh-shell" data-rh-appearance={appearance}>
       {/*
         Rendered only on wide viewports. `isNarrow` starts false so the server
         and the first client render agree; the CSS rule at the bottom of
@@ -941,6 +966,7 @@ export function AppShell({
           // (focus in, scroll lock) happens.
           key={drawer.openId}
           id={drawerId}
+          appearance={appearance}
           closing={drawer.phase === "closing"}
           onClose={drawer.close}
         >
@@ -977,10 +1003,14 @@ export function AppShell({
               aria-label="RevHeat home"
               onClick={navOn(`${PORTAL_ORIGIN}/`)}
             >
-              <BrandWordmark />
+              {appearance === "ledger" ? <LedgerBrand kind="wordmark" className="rh-banner__wordmark" /> : <BrandWordmark />}
             </a>
             {title !== undefined && <span className="rh-banner__product">{title}</span>}
           </div>
+          {navigation.utilityScreens.length > 0 && <nav className="rh-banner__utilities" aria-label="Utilities">
+            {navigation.utilityScreens.map(s => screenLink(s, "rh-banner__utility"))}
+          </nav>}
+          {mobileAction && navigation.primaryAction && screenLink(navigation.primaryAction, "rh-menu__action")}
           {headerActions == null ? null : (
             <div className="rh-banner__actions">{headerActions}</div>
           )}
@@ -999,20 +1029,10 @@ export function AppShell({
             </a>
           )}
         </header>
-        {menuItems && (
+        {(menuItems.length > 0 || (!mobileAction && navigation.primaryAction)) && (
           <nav className="rh-menu" aria-label="Screens">
-            {menuItems.map((s) => (
-              <a
-                key={s.href}
-                className="rh-menu__tab"
-                href={s.href}
-                aria-current={s.active ? "page" : undefined}
-                rel={s.external ? "noopener noreferrer" : undefined}
-                onClick={navOn(s.href, s.external)}
-              >
-                {s.label}
-              </a>
-            ))}
+            {menuItems.map(s => screenLink(s, "rh-menu__tab"))}
+            {!mobileAction && navigation.primaryAction && screenLink(navigation.primaryAction, "rh-menu__action")}
           </nav>
         )}
         {children}

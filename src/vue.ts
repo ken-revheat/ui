@@ -19,12 +19,13 @@ import {
   PORTAL_ORIGIN,
   ALL_PRODUCTS_HREF,
   productTitle,
-  resolveActiveScreen,
+  resolveShellNavigation,
   type MeProduct,
   type RailProduct,
   type ShellScreen,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
+import { LEDGER_BRAND } from "./ledger-brand.js";
 import { shellNavHandler } from "./internal.js";
 
 /** Builds the onClick for one shell link, or undefined for a plain link.
@@ -139,6 +140,12 @@ const CHEVRON_ICON = ["m6 9 6 6 6-6"];
 
 // The RevHeat "R" letterform mark (currentColor) — rail head. Geometry ported
 // verbatim from src/react.tsx's BrandMarkR.
+function ledgerBrand(kind: "wordmark" | "icon", className: string): VNode {
+  const asset = LEDGER_BRAND[kind];
+  return h("svg", { class: className, viewBox: asset.viewBox, role: "img", "aria-label": "RevHeat" },
+    asset.shapes.map((shape, key) => h(shape.tag, { ...shape.attrs, key })));
+}
+
 function brandMarkR(): VNode {
   return h(
     "svg",
@@ -498,6 +505,7 @@ const RhDrawer = defineComponent({
   props: {
     id: { type: String, required: true },
     closing: { type: Boolean, required: true },
+    appearance: { type: String as PropType<"classic" | "ledger">, default: "classic" },
   },
   emits: ["close"],
   setup(props, { emit, slots }) {
@@ -615,7 +623,7 @@ const RhDrawer = defineComponent({
     return () => {
       const body = slots.default ? slots.default() : [];
       return h(Teleport, { to: "body" }, [
-        h("div", { class: `rh-drawer${props.closing ? " rh-drawer--closing" : ""}` }, [
+        h("div", { class: `rh-drawer${props.closing ? " rh-drawer--closing" : ""}`, "data-rh-appearance": props.appearance }, [
           h("div", { class: "rh-drawer__scrim", "aria-hidden": "true", onClick: onClose }),
           h(
             "div",
@@ -680,6 +688,9 @@ export const AppShell = defineComponent({
     adminHref: { type: String, default: undefined },
     /** Horizontal in-product screen menu. Rendered only when 2+ items. */
     screens: { type: Array as PropType<ShellScreen[]>, default: undefined },
+    appearance: { type: String as PropType<"classic" | "ledger">, default: "classic" },
+    primaryAction: { type: Object as PropType<ShellScreen>, default: undefined },
+    utilityScreens: { type: Array as PropType<ShellScreen[]>, default: () => [] },
   },
   emits: ["sign-out", "navigate"],
   setup(props, { emit, slots }) {
@@ -828,10 +839,16 @@ export const AppShell = defineComponent({
     return () => {
       const isStaff = Boolean(props.identity.isStaff ?? props.identity.isInternal);
       const title = productTitle(props.currentProductCode, PRODUCT_CATALOG);
-      const menuItems =
-        props.screens && props.screens.length >= 2
-          ? resolveActiveScreen(props.screens, props.activePath)
-          : null;
+      const navigation = resolveShellNavigation(props.screens ?? [], props.primaryAction, props.utilityScreens, props.activePath);
+      const menuItems = props.screens && (props.screens.length >= 2 || props.primaryAction) ? navigation.screens : [];
+      const mobileAction = props.appearance === "ledger" && isNarrow.value;
+      function screenLink(s: ShellScreen, className: string): VNode {
+        return h("a", { key: s.href, class: className, href: s.href,
+          "aria-current": s.active ? "page" : undefined,
+          rel: s.external ? "noopener noreferrer" : undefined,
+          onClick: navOn(s.href, s.external),
+        }, s.label);
+      }
 
       const model = buildRailModel({
         me: props.degraded
@@ -861,7 +878,7 @@ export const AppShell = defineComponent({
               "aria-label": "RevHeat home",
               onClick: navOn(`${PORTAL_ORIGIN}/`),
             },
-            brandMarkR(),
+            props.appearance === "ledger" ? ledgerBrand("icon", "rh-rail__mark") : brandMarkR(),
           ),
           model.entitled.length > 0
             ? h("nav", { class: "rh-rail__section", "aria-label": "Your products" }, [
@@ -899,7 +916,7 @@ export const AppShell = defineComponent({
         ];
       }
 
-      return h("div", { class: "rh-shell" }, [
+      return h("div", { class: "rh-shell", "data-rh-appearance": props.appearance }, [
         // Rendered only on wide viewports. `isNarrow` starts false so the
         // server and the first client render agree; the CSS rule at the
         // bottom of styles.css keeps the rail hidden on a narrow screen
@@ -914,6 +931,7 @@ export const AppShell = defineComponent({
               {
                 key: openId.value,
                 id: drawerId,
+                appearance: props.appearance,
                 closing: phase.value === "closing",
                 onClose: closeDrawer,
               },
@@ -956,10 +974,14 @@ export const AppShell = defineComponent({
                   "aria-label": "RevHeat home",
                   onClick: navOn(`${PORTAL_ORIGIN}/`),
                 },
-                brandWordmark(),
+                props.appearance === "ledger" ? ledgerBrand("wordmark", "rh-banner__wordmark") : brandWordmark(),
               ),
               title !== undefined ? h("span", { class: "rh-banner__product" }, title) : null,
             ]),
+            navigation.utilityScreens.length > 0
+              ? h("nav", { class: "rh-banner__utilities", "aria-label": "Utilities" }, navigation.utilityScreens.map(s => screenLink(s, "rh-banner__utility")))
+              : null,
+            mobileAction && navigation.primaryAction ? screenLink(navigation.primaryAction, "rh-menu__action") : null,
             slots["header-actions"]
               ? h("div", { class: "rh-banner__actions" }, slots["header-actions"]!())
               : null,
@@ -984,25 +1006,11 @@ export const AppShell = defineComponent({
                 )
               : null,
           ]),
-          menuItems
-            ? h(
-                "nav",
-                { class: "rh-menu", "aria-label": "Screens" },
-                menuItems.map((s) =>
-                  h(
-                    "a",
-                    {
-                      key: s.href,
-                      class: "rh-menu__tab",
-                      href: s.href,
-                      "aria-current": s.active ? "page" : undefined,
-                      rel: s.external ? "noopener noreferrer" : undefined,
-                      onClick: navOn(s.href, s.external),
-                    },
-                    s.label,
-                  ),
-                ),
-              )
+          menuItems.length > 0 || (!mobileAction && navigation.primaryAction)
+            ? h("nav", { class: "rh-menu", "aria-label": "Screens" }, [
+                ...menuItems.map(s => screenLink(s, "rh-menu__tab")),
+                !mobileAction && navigation.primaryAction ? screenLink(navigation.primaryAction, "rh-menu__action") : null,
+              ])
             : null,
           slots.default ? slots.default() : null,
           h("footer", { class: "rh-footer" }, [

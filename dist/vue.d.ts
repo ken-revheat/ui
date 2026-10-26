@@ -77,6 +77,18 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: PropType<ShellScreen[]>;
         default: undefined;
     };
+    appearance: {
+        type: PropType<"classic" | "ledger">;
+        default: string;
+    };
+    primaryAction: {
+        type: PropType<ShellScreen>;
+        default: undefined;
+    };
+    utilityScreens: {
+        type: PropType<ShellScreen[]>;
+        default: () => never[];
+    };
 }>, () => VNode<import("vue").RendererNode, import("vue").RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, ("sign-out" | "navigate")[], "sign-out" | "navigate", import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
@@ -127,17 +139,32 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: PropType<ShellScreen[]>;
         default: undefined;
     };
+    appearance: {
+        type: PropType<"classic" | "ledger">;
+        default: string;
+    };
+    primaryAction: {
+        type: PropType<ShellScreen>;
+        default: undefined;
+    };
+    utilityScreens: {
+        type: PropType<ShellScreen[]>;
+        default: () => never[];
+    };
 }>> & Readonly<{
     onNavigate?: ((...args: any[]) => any) | undefined;
     "onSign-out"?: ((...args: any[]) => any) | undefined;
 }>, {
     currentProductCode: string;
     adminHref: string;
+    appearance: "classic" | "ledger";
     viewerRole: "rep" | "manager" | "admin";
     isPrimaryBuyer: boolean | undefined;
     degraded: boolean;
     productCodesFallback: string[];
     screens: ShellScreen[];
+    primaryAction: ShellScreen;
+    utilityScreens: ShellScreen[];
 }, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
 export default AppShell;
 //# sourceMappingURL=vue.d.ts.map

@@ -123,4 +123,12 @@ export declare const ALL_PRODUCTS_HREF: string;
  * `catalog.js` and gains no runtime dependency on it.
  */
 export declare function productTitle(code: string | undefined, catalog: ProductDef[]): string | undefined;
+/** Resolve all configured navigation together, so a utility/action route cannot
+ * leave Home selected. Explicit active flags retain resolveActiveScreen rules
+ * across the complete configuration. This function makes no permission choices. */
+export declare function resolveShellNavigation(screens: ShellScreen[], primaryAction: ShellScreen | undefined, utilityScreens: ShellScreen[], activePath: string): {
+    screens: ShellScreen[];
+    primaryAction: ShellScreen | undefined;
+    utilityScreens: ShellScreen[];
+};
 //# sourceMappingURL=core.d.ts.map

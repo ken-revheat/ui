@@ -3,8 +3,9 @@ import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-run
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { PRODUCT_CATALOG } from "./catalog.js";
-import { buildRailModel, withSource, isActiveProduct, PORTAL_ORIGIN, ALL_PRODUCTS_HREF, productTitle, resolveActiveScreen, } from "./core.js";
+import { buildRailModel, withSource, isActiveProduct, PORTAL_ORIGIN, ALL_PRODUCTS_HREF, productTitle, resolveShellNavigation, } from "./core.js";
 import { iconPathsFor } from "./icons.js";
+import { LEDGER_BRAND } from "./ledger-brand.js";
 import { shellNavHandler } from "./internal.js";
 // Matches the portal's own sidebar breakpoint (RhSidebar.vue) and the existing
 // `@media (max-width: 900px)` rule in styles.css. A raw px query on purpose —
@@ -120,6 +121,10 @@ const CLOSE_ICON = ["M18 6 6 18", "m6 6 12 12"];
 const CHEVRON_ICON = ["m6 9 6 6 6-6"];
 // The RevHeat "R" letterform mark (currentColor) — rail head, replacing the old
 // text link. Geometry ported verbatim from the design-tokens wordmark R glyph.
+function LedgerBrand({ kind, className }) {
+    const asset = LEDGER_BRAND[kind];
+    return _jsx("svg", { className: className, viewBox: asset.viewBox, role: "img", "aria-label": "RevHeat", children: asset.shapes.map((shape, index) => React.createElement(shape.tag, { ...shape.attrs, key: index })) });
+}
 function BrandMarkR() {
     return (_jsx("svg", { className: "rh-rail__mark", xmlns: "http://www.w3.org/2000/svg", viewBox: "264.263 347.964 72.08 72.08", role: "img", "aria-label": "RevHeat", children: _jsx("path", { fill: "currentColor", d: "m310.29 394.81c5.3539-1.5444 9.5753-4.2214 12.458-8.1338 2.8829-3.9125 4.4273-8.6486 4.4273-14.414 0-7.5161-2.574-13.488-7.722-17.812-5.148-4.3243-12.252-6.4865-21.313-6.4865h-25.843v4.7362h25.843c7.619 0 13.488 1.7503 17.606 5.148 4.0154 3.3977 6.0746 8.2368 6.0746 14.414 0 6.2806-2.0592 11.12-6.0746 14.517-4.1184 3.3977-9.9871 5.045-17.606 5.045h-25.84v28.22h5.251v-23.578h20.592c2.0592 0 4.4273-0.10296 7.0013-0.5148l17.194 24.093h5.9717z" }) }));
 }
@@ -296,7 +301,7 @@ function AccountMenu({ identity, isStaff, adminHref, onSignOut, navOn }) {
 /* ------------------------------------------------------------------ */
 /* drawer                                                              */
 /* ------------------------------------------------------------------ */
-function Drawer({ id, closing, onClose, children, }) {
+function Drawer({ id, closing, onClose, children, appearance, }) {
     const panelRef = React.useRef(null);
     const triggerRef = React.useRef(null);
     // Move focus into the panel, and remember what opened us so we can give it
@@ -398,11 +403,8 @@ function Drawer({ id, closing, onClose, children, }) {
         document.addEventListener("keydown", onKeyDown);
         return () => document.removeEventListener("keydown", onKeyDown);
     }, [closing, onClose]);
-    const tree = (_jsxs("div", { className: `rh-drawer${closing ? " rh-drawer--closing" : ""}`, children: [_jsx("div", { className: "rh-drawer__scrim", onClick: onClose, "aria-hidden": true }), _jsxs("div", { className: "rh-drawer__panel rh-rail rh-rail--drawer", id: id, role: "dialog", "aria-modal": closing ? undefined : "true", "aria-label": "RevHeat products", ref: panelRef, 
-                // Clicking dead space inside the panel keeps focus on the panel rather
-                // than dropping it to <body>. The document-level handlers above cope
-                // either way; this keeps the focus ring somewhere sensible.
-                tabIndex: -1, children: [_jsx("button", { type: "button", className: "rh-drawer__close", "aria-label": "Close product menu", onClick: onClose, children: _jsx(StrokeIcon, { className: "rh-drawer__close-glyph", d: CLOSE_ICON }) }), children] })] }));
+    // Panel tabIndex keeps dead-space clicks focused inside the drawer.
+    const tree = (_jsxs("div", { className: `rh-drawer${closing ? " rh-drawer--closing" : ""}`, "data-rh-appearance": appearance, children: [_jsx("div", { className: "rh-drawer__scrim", onClick: onClose, "aria-hidden": true }), _jsxs("div", { className: "rh-drawer__panel rh-rail rh-rail--drawer", id: id, role: "dialog", "aria-modal": closing ? undefined : "true", "aria-label": "RevHeat products", ref: panelRef, tabIndex: -1, children: [_jsx("button", { type: "button", className: "rh-drawer__close", "aria-label": "Close product menu", onClick: onClose, children: _jsx(StrokeIcon, { className: "rh-drawer__close-glyph", d: CLOSE_ICON }) }), children] })] }));
     // Portaled to <body> so an ancestor `transform`/`filter` in the consumer app
     // cannot become the containing block for our position:fixed scrim — the
     // failure mode there is a scrim that covers only part of the viewport.
@@ -413,7 +415,7 @@ function Drawer({ id, closing, onClose, children, }) {
 /* ------------------------------------------------------------------ */
 /* shell                                                               */
 /* ------------------------------------------------------------------ */
-export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded = false, productCodesFallback = [], activePath, currentProductCode, adminHref, screens, onNavigate, headerActions, accountMenu, onSignOut, children, }) {
+export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded = false, productCodesFallback = [], activePath, currentProductCode, adminHref, screens, appearance = "classic", primaryAction, utilityScreens = [], onNavigate, headerActions, accountMenu, onSignOut, children, }) {
     const isNarrow = useIsNarrow();
     const drawer = useDrawer();
     const drawerId = React.useId();
@@ -490,7 +492,9 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
     }, [isNarrow, dismissDrawer]);
     const isStaff = identity.isStaff ?? identity.isInternal;
     const title = productTitle(currentProductCode, PRODUCT_CATALOG);
-    const menuItems = screens && screens.length >= 2 ? resolveActiveScreen(screens, activePath) : null;
+    const navigation = resolveShellNavigation(screens ?? [], primaryAction, utilityScreens, activePath);
+    const menuItems = screens && (screens.length >= 2 || primaryAction) ? navigation.screens : [];
+    const mobileAction = appearance === "ledger" && isNarrow;
     const model = buildRailModel({
         me: degraded
             ? null
@@ -512,12 +516,15 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
         productCodesFallback,
         catalog: PRODUCT_CATALOG,
     });
-    const railBody = (_jsxs(_Fragment, { children: [_jsx("a", { className: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", onClick: navOn(`${PORTAL_ORIGIN}/`), children: _jsx(BrandMarkR, {}) }), model.entitled.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Your products", children: [_jsx("p", { className: "rh-rail__heading", children: "Your products" }), _jsx("ul", { children: model.entitled.map((p) => (_jsx(EntitledRow, { p: p, activePath: activePath, currentProductCode: currentProductCode, navOn: navOn }, p.code))) })] })), _jsx("a", { className: "rh-row rh-row--all", href: ALL_PRODUCTS_HREF, onClick: navOn(ALL_PRODUCTS_HREF), children: "All products \u2192" }), _jsx("div", { className: "rh-rail__account", children: accountMenu ?? (_jsx(AccountMenu, { identity: identity, isStaff: isStaff, adminHref: adminHref, onSignOut: onSignOut, navOn: navOn })) })] }));
-    return (_jsxs("div", { className: "rh-shell", children: [!isNarrow && (_jsx("aside", { className: "rh-rail", "aria-label": "RevHeat products", children: railBody })), drawer.isMounted && (_jsx(Drawer
+    function screenLink(s, className) {
+        return _jsx("a", { className: className, href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, onClick: navOn(s.href, s.external), children: s.label }, s.href);
+    }
+    const railBody = (_jsxs(_Fragment, { children: [_jsx("a", { className: "rh-rail__home", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", onClick: navOn(`${PORTAL_ORIGIN}/`), children: appearance === "ledger" ? _jsx(LedgerBrand, { kind: "icon", className: "rh-rail__mark" }) : _jsx(BrandMarkR, {}) }), model.entitled.length > 0 && (_jsxs("nav", { className: "rh-rail__section", "aria-label": "Your products", children: [_jsx("p", { className: "rh-rail__heading", children: "Your products" }), _jsx("ul", { children: model.entitled.map((p) => (_jsx(EntitledRow, { p: p, activePath: activePath, currentProductCode: currentProductCode, navOn: navOn }, p.code))) })] })), _jsx("a", { className: "rh-row rh-row--all", href: ALL_PRODUCTS_HREF, onClick: navOn(ALL_PRODUCTS_HREF), children: "All products \u2192" }), _jsx("div", { className: "rh-rail__account", children: accountMenu ?? (_jsx(AccountMenu, { identity: identity, isStaff: isStaff, adminHref: adminHref, onSignOut: onSignOut, navOn: navOn })) })] }));
+    return (_jsxs("div", { className: "rh-shell", "data-rh-appearance": appearance, children: [!isNarrow && (_jsx("aside", { className: "rh-rail", "aria-label": "RevHeat products", children: railBody })), drawer.isMounted && (_jsx(Drawer
             // Every open is a fresh Drawer — see `useDrawer`. Without the key,
             // reopening mid-exit reuses the instance and none of its mount work
             // (focus in, scroll lock) happens.
-            , { id: drawerId, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, onClick: navOn(ALL_PRODUCTS_HREF), children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", onClick: navOn(`${PORTAL_ORIGIN}/`), children: _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (
+            , { id: drawerId, appearance: appearance, closing: drawer.phase === "closing", onClose: drawer.close, children: railBody }, drawer.openId)), _jsxs("div", { className: "rh-shell__main", children: [_jsxs("header", { className: "rh-banner", children: [_jsxs("div", { className: "rh-banner__lead", children: [_jsx("button", { type: "button", className: "rh-banner__menu", "aria-label": "Open product menu", "aria-controls": drawer.isMounted ? drawerId : undefined, "aria-expanded": drawer.isOpen, onClick: drawer.open, children: _jsx(StrokeIcon, { className: "rh-banner__menu-glyph", d: MENU_ICON }) }), _jsxs("a", { className: "rh-banner__portal", href: ALL_PRODUCTS_HREF, onClick: navOn(ALL_PRODUCTS_HREF), children: [_jsx("span", { "aria-hidden": true, children: "\u2190" }), " Portal"] }), _jsx("a", { className: "rh-banner__brand", href: `${PORTAL_ORIGIN}/`, "aria-label": "RevHeat home", onClick: navOn(`${PORTAL_ORIGIN}/`), children: appearance === "ledger" ? _jsx(LedgerBrand, { kind: "wordmark", className: "rh-banner__wordmark" }) : _jsx(BrandWordmark, {}) }), title !== undefined && _jsx("span", { className: "rh-banner__product", children: title })] }), navigation.utilityScreens.length > 0 && _jsx("nav", { className: "rh-banner__utilities", "aria-label": "Utilities", children: navigation.utilityScreens.map(s => screenLink(s, "rh-banner__utility")) }), mobileAction && navigation.primaryAction && screenLink(navigation.primaryAction, "rh-menu__action"), headerActions == null ? null : (_jsx("div", { className: "rh-banner__actions", children: headerActions })), isStaff && adminHref && (
                             /* Same href as the account menu's "Admin" item, so it gets the
                                same treatment — one shell must not give one link two
                                behaviours. `adminHref` is the only consumer-supplied href in
@@ -527,6 +534,6 @@ export function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degra
                                navigate hook = route in-app), not an exception: all five
                                React/Vue consumers pass an absolute app.revheat.com URL today
                                and are unaffected. */
-                            _jsx("a", { className: "rh-banner__admin", href: adminHref, onClick: navOn(adminHref), children: "Admin" }))] }), menuItems && (_jsx("nav", { className: "rh-menu", "aria-label": "Screens", children: menuItems.map((s) => (_jsx("a", { className: "rh-menu__tab", href: s.href, "aria-current": s.active ? "page" : undefined, rel: s.external ? "noopener noreferrer" : undefined, onClick: navOn(s.href, s.external), children: s.label }, s.href))) })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
+                            _jsx("a", { className: "rh-banner__admin", href: adminHref, onClick: navOn(adminHref), children: "Admin" }))] }), (menuItems.length > 0 || (!mobileAction && navigation.primaryAction)) && (_jsxs("nav", { className: "rh-menu", "aria-label": "Screens", children: [menuItems.map(s => screenLink(s, "rh-menu__tab")), !mobileAction && navigation.primaryAction && screenLink(navigation.primaryAction, "rh-menu__action")] })), children, _jsxs("footer", { className: "rh-footer", children: [_jsxs("span", { children: ["\u00A9 ", new Date().getFullYear(), " RevHeat"] }), _jsx("a", { href: "https://revheat.com/terms", children: "Terms" }), _jsx("a", { href: "https://revheat.com/privacy", children: "Privacy" }), _jsx("a", { href: "mailto:support@revheat.com", children: "Support" })] })] })] }));
 }
 //# sourceMappingURL=react.js.map
