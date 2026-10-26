@@ -95,7 +95,7 @@ export interface AppShellProps {
    */
   currentProductCode?: string;
   adminHref?: string;
-  /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+  /** In-product screens render with 2+ items, or with a primaryAction. */
   screens?: ShellScreen[];
   /** Opt-in Ledger presentation. Defaults preserve existing products. */
   appearance?: "classic" | "ledger";

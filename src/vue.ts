@@ -686,7 +686,7 @@ export const AppShell = defineComponent({
     /** The product code of the app rendering this shell. Highlights that row. */
     currentProductCode: { type: String, default: undefined },
     adminHref: { type: String, default: undefined },
-    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    /** In-product screens render with 2+ items, or with a primaryAction. */
     screens: { type: Array as PropType<ShellScreen[]>, default: undefined },
     appearance: { type: String as PropType<"classic" | "ledger">, default: "classic" },
     primaryAction: { type: Object as PropType<ShellScreen>, default: undefined },
@@ -843,7 +843,7 @@ export const AppShell = defineComponent({
       const menuItems = props.screens && (props.screens.length >= 2 || props.primaryAction) ? navigation.screens : [];
       const mobileAction = props.appearance === "ledger" && isNarrow.value;
       function screenLink(s: ShellScreen, className: string): VNode {
-        return h("a", { key: s.href, class: className, href: s.href,
+        return h("a", { key: `${className}:${s.href}`, class: className, href: s.href,
           "aria-current": s.active ? "page" : undefined,
           rel: s.external ? "noopener noreferrer" : undefined,
           onClick: navOn(s.href, s.external),

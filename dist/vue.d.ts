@@ -72,7 +72,7 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: StringConstructor;
         default: undefined;
     };
-    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    /** In-product screens render with 2+ items, or with a primaryAction. */
     screens: {
         type: PropType<ShellScreen[]>;
         default: undefined;
@@ -134,7 +134,7 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: StringConstructor;
         default: undefined;
     };
-    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    /** In-product screens render with 2+ items, or with a primaryAction. */
     screens: {
         type: PropType<ShellScreen[]>;
         default: undefined;

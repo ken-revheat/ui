@@ -43,7 +43,8 @@ stability and for anything that reads the model directly) but neither
 ## `screens`
 
 `screens` is the shell's horizontal in-product screen menu (`.rh-menu`),
-rendered only when 2 or more items are passed:
+rendered with 2 or more items, or with a configured `primaryAction` (including
+the single-screen case):
 
 ```ts
 interface ShellScreen {

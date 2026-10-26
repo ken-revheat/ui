@@ -198,3 +198,26 @@ describe("Ledger drawer exit contrast", () => {
     } finally { drawer.remove(); style.remove(); }
   });
 });
+
+describe("utility navigation bounds", () => {
+  it("allows multiple utilities to wrap and bounds an indivisible link to its own scroll area", () => {
+    const style = document.createElement("style");
+    style.textContent = readFileSync("src/styles.css", "utf8");
+    const utilities = document.createElement("nav");
+    utilities.className = "rh-banner__utilities";
+    document.head.append(style); document.body.append(utilities);
+    try {
+      const s = getComputedStyle(utilities);
+      expect(s.flexWrap).toBe("wrap");
+      expect(s.maxWidth).toBe("100%");
+      expect(parseFloat(s.minWidth)).toBe(0);
+      expect(s.overflowX).toBe("auto");
+      // The 2px outline + 2px offset must fit inside the clipping scrollport.
+      expect(s.paddingTop).toBe("4px");
+      expect(s.paddingRight).toBe("4px");
+      expect(s.paddingBottom).toBe("4px");
+      expect(s.paddingLeft).toBe("4px");
+      expect(s.boxSizing).toBe("border-box");
+    } finally {utilities.remove();style.remove();}
+  });
+});

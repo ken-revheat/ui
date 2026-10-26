@@ -969,3 +969,14 @@ it("Ledger phone moves Analyze to the header and retains the drawer's safe exit"
   await waitFor(() => expect(document.body.style.overflow).not.toBe("hidden"));
   expect(document.activeElement).toBe(screen.getByRole("button", {name:"Open product menu"}));
 });
+
+it("keeps screen links distinct from a primary action sharing their destination during updates", async () => {
+  const w = mountShell({
+    screens: [{label:"Home",href:"/app"},{label:"Analyze history",href:"/app/analyze"},{label:"Deals",href:"/app/deals"}],
+    primaryAction: {label:"Analyze a call",href:"/app/analyze"},
+  });
+  await w.setProps({primaryAction:undefined, screens:[{label:"Deals",href:"/app/deals"},{label:"Analyze history",href:"/app/analyze"},{label:"Home",href:"/app"}]});
+  const menu = screen.getByRole("navigation", {name:"Screens"});
+  expect(within(menu).getAllByRole("link").map(el=>el.textContent)).toEqual(["Deals","Analyze history","Home"]);
+  expect(menu.querySelector('.rh-menu__action')).toBeNull();
+});

@@ -635,7 +635,7 @@ a.rh-row--all:hover {
 }
 
 /* Additive navigation APIs are usable by either presentation. */
-.rh-banner__utilities { display: flex; align-items: center; gap: 0.75rem; }
+.rh-banner__utilities { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; min-width: 0; max-width: 100%; overflow-x: auto; box-sizing: border-box; padding: 4px; }
 .rh-banner__utility { color: var(--rh-text-secondary, #505057); font-size: 0.875rem; text-decoration: none; white-space: nowrap; }
 .rh-banner__utility:hover, .rh-banner__utility[aria-current="page"] { text-decoration: underline; color: var(--rh-ink, #19191e); }
 .rh-menu__action { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; margin-left: auto; min-height: 40px; padding: 0.5rem 1rem; border-radius: 9999px; background: var(--rh-primary, #6143f9); color: var(--rh-primary-foreground, #fff); font-size: 0.875rem; font-weight: 600; text-decoration: none; white-space: nowrap; }
