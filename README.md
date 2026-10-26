@@ -43,7 +43,8 @@ stability and for anything that reads the model directly) but neither
 ## `screens`
 
 `screens` is the shell's horizontal in-product screen menu (`.rh-menu`),
-rendered only when 2 or more items are passed:
+rendered with 2 or more items, or with a configured `primaryAction` (including
+the single-screen case):
 
 ```ts
 interface ShellScreen {
@@ -243,3 +244,50 @@ No script here is named `build`, `prepare`, `prepack`, or `install`. `pacote`
 install` inside the cloned git-dep, which pulls this package's devDependencies
 and crashes arborist for consumers. The compile step is deliberately named
 `compile` instead.
+
+## Ledger presentation (v2.4.0, opt in)
+
+```tsx
+<AppShell appearance="ledger" {...existingIdentityAndProductProps}
+  screens={authorizedScreens}
+  primaryAction={{ label: 'Analyze a call', href: '/app/analyze' }}
+  utilityScreens={[{ label: 'Settings', href: '/app/settings' }]}
+  onNavigate={href => router.push(href)}>{children}</AppShell>
+```
+
+Vue takes the same prop names (`:primary-action`, `:utility-screens`) and
+continues to emit `navigate`. `header-actions`/React `headerActions` is unchanged.
+These links use `ShellScreen` from `@revheat/ui/core` (`label`, `href`, optional
+`active`/`external`). No permission is granted by a link: the app filters its
+configuration using its existing role/CRM/product authorization. No product's
+screen names/order are built into the shared package.
+
+Import `@revheat/design-tokens` **1.4.0** `ledger.css` after base vars/Tailwind,
+plus `ledger-fonts.css` and existing `fonts.css` for Geist Mono. Set
+`data-rh-theme="ledger"` on **html** during SSR. `appearance` selects shell
+structure/brand drawing; the html attribute supplies shared tokens, including
+body-portaled drawer contents. Default `appearance="classic"` preserves existing
+consumer presentation; new props default absent. No consumer has to migrate on
+package upgrade alone. New brand path data is transcribed exactly from the
+approved token assets in `src/ledger-brand.ts`, shared by both renderers.
+
+Navigation active state resolves across screens, primary action and utilities
+in one call to `resolveShellNavigation`. A matching Settings/Analyze route does
+not also select Home. If **any** item has explicit `active`, the existing explicit
+mode applies to the whole configuration: apps using explicit screen flags must
+also provide explicit utility/action flags. No arrays or items are mutated.
+The old fewer-than-two screen-tab behavior remains unless primaryAction is set;
+an action alone still renders. Utilities always render in the header.
+
+Ledger desktop uses an 80px dark product rail, a 160px original wordmark and
+top screen navigation. At <=900px the product drawer retains its focus trap,
+Escape/return focus and scroll locking. Screens are pinned at the bottom with
+52px targets and safe-area clearance; Analyze moves to the wrapping sticky
+header. The page reserves bottom padding so final actions/footer stay reachable.
+The compact desktop account menu opens beside the rail to avoid scrollport
+clipping. Classic layout and product navigation behavior are unchanged.
+
+B owns Call Analyzer's authorized Home → Deals → Calls → Team configuration,
+Analyze and Settings. Pin both exact reviewed package commits in its manifests
+and lockfile. Rollback reverts those pins and removes the opt-in props, imports
+and html attribute together. No stored-data migration or forced regeneration.

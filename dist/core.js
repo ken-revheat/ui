@@ -147,4 +147,17 @@ export function productTitle(code, catalog) {
         return undefined;
     return catalog.find((p) => p.code === code)?.title;
 }
+/** Resolve all configured navigation together, so a utility/action route cannot
+ * leave Home selected. Explicit active flags retain resolveActiveScreen rules
+ * across the complete configuration. This function makes no permission choices. */
+export function resolveShellNavigation(screens, primaryAction, utilityScreens, activePath) {
+    const resolved = resolveActiveScreen([
+        ...screens, ...(primaryAction ? [primaryAction] : []), ...utilityScreens,
+    ], activePath);
+    return {
+        screens: resolved.slice(0, screens.length),
+        primaryAction: primaryAction ? resolved[screens.length] : undefined,
+        utilityScreens: resolved.slice(screens.length + (primaryAction ? 1 : 0)),
+    };
+}
 //# sourceMappingURL=core.js.map

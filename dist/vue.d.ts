@@ -72,10 +72,22 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: StringConstructor;
         default: undefined;
     };
-    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    /** In-product screens render with 2+ items, or with a primaryAction. */
     screens: {
         type: PropType<ShellScreen[]>;
         default: undefined;
+    };
+    appearance: {
+        type: PropType<"classic" | "ledger">;
+        default: string;
+    };
+    primaryAction: {
+        type: PropType<ShellScreen>;
+        default: undefined;
+    };
+    utilityScreens: {
+        type: PropType<ShellScreen[]>;
+        default: () => never[];
     };
 }>, () => VNode<import("vue").RendererNode, import("vue").RendererElement, {
     [key: string]: any;
@@ -122,10 +134,22 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: StringConstructor;
         default: undefined;
     };
-    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    /** In-product screens render with 2+ items, or with a primaryAction. */
     screens: {
         type: PropType<ShellScreen[]>;
         default: undefined;
+    };
+    appearance: {
+        type: PropType<"classic" | "ledger">;
+        default: string;
+    };
+    primaryAction: {
+        type: PropType<ShellScreen>;
+        default: undefined;
+    };
+    utilityScreens: {
+        type: PropType<ShellScreen[]>;
+        default: () => never[];
     };
 }>> & Readonly<{
     onNavigate?: ((...args: any[]) => any) | undefined;
@@ -133,11 +157,14 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
 }>, {
     currentProductCode: string;
     adminHref: string;
+    appearance: "classic" | "ledger";
     viewerRole: "rep" | "manager" | "admin";
     isPrimaryBuyer: boolean | undefined;
     degraded: boolean;
     productCodesFallback: string[];
     screens: ShellScreen[];
+    primaryAction: ShellScreen;
+    utilityScreens: ShellScreen[];
 }, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
 export default AppShell;
 //# sourceMappingURL=vue.d.ts.map

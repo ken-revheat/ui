@@ -56,8 +56,13 @@ export interface AppShellProps {
      */
     currentProductCode?: string;
     adminHref?: string;
-    /** Horizontal in-product screen menu. Rendered only when 2+ items. */
+    /** In-product screens render with 2+ items, or with a primaryAction. */
     screens?: ShellScreen[];
+    /** Opt-in Ledger presentation. Defaults preserve existing products. */
+    appearance?: "classic" | "ledger";
+    /** Consumer-filtered navigation; does not grant access or infer roles. */
+    primaryAction?: ShellScreen;
+    utilityScreens?: ShellScreen[];
     /**
      * Client-side navigation hook. When present, a plain left-click on a
      * same-origin link is intercepted (`preventDefault`) and `onNavigate(href)`
@@ -100,5 +105,5 @@ export interface AppShellProps {
     onSignOut?: () => void;
     children: React.ReactNode;
 }
-export declare function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded, productCodesFallback, activePath, currentProductCode, adminHref, screens, onNavigate, headerActions, accountMenu, onSignOut, children, }: AppShellProps): React.JSX.Element;
+export declare function AppShell({ identity, products, viewerRole, isPrimaryBuyer, degraded, productCodesFallback, activePath, currentProductCode, adminHref, screens, appearance, primaryAction, utilityScreens, onNavigate, headerActions, accountMenu, onSignOut, children, }: AppShellProps): React.JSX.Element;
 //# sourceMappingURL=react.d.ts.map

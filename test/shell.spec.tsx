@@ -1233,3 +1233,53 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
     expect(onNavigate).not.toHaveBeenCalled();
   });
 });
+
+
+describe("Ledger navigation contract", () => {
+  it("keeps product screen configuration and places Analyze and Settings separately", async () => {
+    const navigate = vi.fn();
+    renderShell({
+      appearance: "ledger",
+      screens: [{ label: "Home", href: "/app" }, { label: "Deals", href: "/app/deals" }],
+      primaryAction: { label: "Analyze a call", href: "/app/analyze" },
+      utilityScreens: [{ label: "Settings", href: "/app/settings" }],
+      activePath: "/app/settings",
+      onNavigate: navigate,
+    });
+    const menu = screen.getByRole("navigation", { name: "Screens" });
+    expect(within(menu).getAllByRole("link").map(el => el.textContent)).toEqual(["Home", "Deals", "Analyze a call"]);
+    const settings = screen.getByRole("link", { name: "Settings" });
+    expect(settings.closest("header")).not.toBeNull();
+    expect(settings.getAttribute("aria-current")).toBe("page");
+    expect(menu.querySelector('[aria-current="page"]')).toBeNull();
+    fireEvent.click(screen.getByRole("link", { name: "Analyze a call" }));
+    expect(navigate).toHaveBeenCalledWith("/app/analyze");
+    expect(document.querySelector('.rh-shell[data-rh-appearance="ledger"]')).not.toBeNull();
+    expect(document.querySelector('.rh-banner__wordmark')?.getAttribute("viewBox")).toBe("272.297 347.96 479.41 72.089");
+  });
+
+  it("allows an action without inventing screen tabs or permissions", () => {
+    renderShell({ primaryAction: { label: "Analyze", href: "/app/analyze" } });
+    expect(screen.getByRole("link", { name: "Analyze" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Team" })).toBeNull();
+  });
+});
+
+
+it("Ledger phone moves Analyze to the header and retains the drawer's safe exit", async () => {
+  setViewport(true);
+  renderShell({appearance:"ledger", screens:[{label:"Home",href:"/app"},{label:"Deals",href:"/app/deals"}],
+    primaryAction:{label:"Analyze",href:"/app/analyze"}});
+  await waitFor(() => {
+    expect(screen.getByRole("link", {name:"Analyze"}).closest("header")).not.toBeNull();
+  });
+  expect(within(screen.getByRole("navigation", {name:"Screens"})).getAllByRole("link")).toHaveLength(2);
+  screen.getByRole("button", {name:"Open product menu"}).focus();
+  fireEvent.click(screen.getByRole("button", {name:"Open product menu"}));
+  await waitFor(() => expect(screen.getByRole("dialog").getAttribute("aria-modal")).toBe("true"));
+  expect(screen.getByRole("dialog").closest('[data-rh-appearance="ledger"]')).not.toBeNull();
+  fireEvent.keyDown(screen.getByRole("button", {name:"Close product menu"}), {key:"Escape"});
+  await waitFor(() => expect(document.body.style.overflow).not.toBe("hidden"));
+  expect(document.activeElement).toBe(screen.getByRole("button", {name:"Open product menu"}));
+});
