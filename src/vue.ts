@@ -23,6 +23,7 @@ import {
   type MeProduct,
   type RailProduct,
   type ShellScreen,
+  type PlatformWorkspace,
 } from "./core.js";
 import { iconPathsFor } from "./icons.js";
 import { LEDGER_BRAND } from "./ledger-brand.js";
@@ -691,6 +692,7 @@ export const AppShell = defineComponent({
     appearance: { type: String as PropType<"classic" | "ledger">, default: "classic" },
     primaryAction: { type: Object as PropType<ShellScreen>, default: undefined },
     utilityScreens: { type: Array as PropType<ShellScreen[]>, default: () => [] },
+    workspace: { type: Object as PropType<PlatformWorkspace | null>, default: null },
   },
   emits: ["sign-out", "navigate"],
   setup(props, { emit, slots }) {
@@ -838,7 +840,8 @@ export const AppShell = defineComponent({
 
     return () => {
       const isStaff = Boolean(props.identity.isStaff ?? props.identity.isInternal);
-      const title = productTitle(props.currentProductCode, PRODUCT_CATALOG);
+      const title = props.workspace ? 'Platform' : productTitle(props.currentProductCode, PRODUCT_CATALOG);
+      const homeHref = props.workspace?.homeHref ?? `${PORTAL_ORIGIN}/`;
       const navigation = resolveShellNavigation(props.screens ?? [], props.primaryAction, props.utilityScreens, props.activePath);
       const menuItems = props.screens && (props.screens.length >= 2 || props.primaryAction) ? navigation.screens : [];
       const mobileAction = props.appearance === "ledger" && isNarrow.value;
@@ -874,13 +877,23 @@ export const AppShell = defineComponent({
             "a",
             {
               class: "rh-rail__home",
-              href: `${PORTAL_ORIGIN}/`,
+              href: homeHref,
               "aria-label": "RevHeat home",
-              onClick: navOn(`${PORTAL_ORIGIN}/`),
+              onClick: navOn(homeHref),
             },
             props.appearance === "ledger" ? ledgerBrand("icon", "rh-rail__mark") : brandMarkR(),
           ),
-          model.entitled.length > 0
+          props.workspace
+            ? h('nav', {class:'rh-workspace-links','aria-label':'Workspace'},[
+                screenLink({label:'Workspace',href:homeHref},'rh-workspace-link'),
+                props.workspace.advisor ? screenLink(props.workspace.advisor,'rh-workspace-link') : null,
+                props.workspace.personalHref ? screenLink({label:'My work',href:props.workspace.personalHref},'rh-workspace-link') : null,
+                props.workspace.tools.length ? h('details',{class:'rh-workspace-tools'},[
+                  h('summary',{},'Tools'),
+                  ...props.workspace.tools.map(t=>screenLink({...t,label:productTitle(t.code,PRODUCT_CATALOG)??t.label},'rh-workspace-link')),
+                ]) : null,
+              ])
+            : model.entitled.length > 0
             ? h("nav", { class: "rh-rail__section", "aria-label": "Your products" }, [
                 h("p", { class: "rh-rail__heading" }, "Your products"),
                 h(
@@ -892,7 +905,7 @@ export const AppShell = defineComponent({
                 ),
               ])
             : null,
-          h(
+          !props.workspace ? h(
             "a",
             {
               class: "rh-row rh-row--all",
@@ -900,7 +913,7 @@ export const AppShell = defineComponent({
               onClick: navOn(ALL_PRODUCTS_HREF),
             },
             "All products →",
-          ),
+          ) : null,
           h("div", { class: "rh-rail__account" }, [
             slots["account-menu"]
               ? slots["account-menu"]!()
@@ -916,7 +929,7 @@ export const AppShell = defineComponent({
         ];
       }
 
-      return h("div", { class: "rh-shell", "data-rh-appearance": props.appearance }, [
+      return h("div", { class: "rh-shell", "data-rh-appearance": props.appearance, 'data-rh-workspace':props.workspace ? 'true' : undefined }, [
         // Rendered only on wide viewports. `isNarrow` starts false so the
         // server and the first client render agree; the CSS rule at the
         // bottom of styles.css keeps the rail hidden on a narrow screen
@@ -957,7 +970,7 @@ export const AppShell = defineComponent({
                 },
                 strokeIcon(MENU_ICON, "rh-banner__menu-glyph"),
               ),
-              h(
+              !props.workspace ? h(
                 "a",
                 {
                   class: "rh-banner__portal",
@@ -965,14 +978,14 @@ export const AppShell = defineComponent({
                   onClick: navOn(ALL_PRODUCTS_HREF),
                 },
                 [h("span", { "aria-hidden": "true" }, "←"), " Portal"],
-              ),
+              ) : null,
               h(
                 "a",
                 {
                   class: "rh-banner__brand",
-                  href: `${PORTAL_ORIGIN}/`,
+                  href: homeHref,
                   "aria-label": "RevHeat home",
-                  onClick: navOn(`${PORTAL_ORIGIN}/`),
+                  onClick: navOn(homeHref),
                 },
                 props.appearance === "ledger" ? ledgerBrand("wordmark", "rh-banner__wordmark") : brandWordmark(),
               ),

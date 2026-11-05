@@ -645,6 +645,12 @@ a.rh-row--all:hover {
 /* Ledger is explicitly selected; the classic shell's layout stays intact. */
 .rh-drawer[data-rh-appearance="ledger"] { font-family: var(--rh-font-ui, "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif); }
 .rh-shell[data-rh-appearance="ledger"] { grid-template-columns: 80px minmax(0, 1fr); }
+.rh-shell[data-rh-workspace="true"] { grid-template-columns: 216px minmax(0, 1fr); }
+.rh-workspace-links { display: flex; flex-direction: column; gap: 8px; padding: 16px 4px; }
+.rh-workspace-link, .rh-workspace-tools summary { display: block; padding: 12px; border-radius: 8px; color: var(--rh-on-dark, #C9C9D2); font-size: 14px; line-height: 1.4; text-decoration: none; cursor: pointer; }
+.rh-workspace-link:hover, .rh-workspace-link[aria-current="page"], .rh-workspace-tools summary:hover { color: white; background: var(--rh-dark-border, #2A2A33); }
+.rh-workspace-link:focus-visible, .rh-workspace-tools summary:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+.rh-workspace-tools .rh-workspace-link { padding-left: 24px; }
 [data-rh-appearance="ledger"] .rh-rail { background: var(--rh-dark, #0B0B0F); color: var(--rh-on-dark, #C9C9D2); border-color: var(--rh-dark-border, #2A2A33); }
 [data-rh-appearance="ledger"] .rh-rail__home { justify-content: center; padding: 0.5rem 0; }
 [data-rh-appearance="ledger"] .rh-rail__mark { width: 36px; height: 36px; }
@@ -674,6 +680,9 @@ a.rh-row--all:hover {
 .rh-shell[data-rh-appearance="ledger"] > .rh-rail .rh-row--all { padding-inline: 2px; font-size: 10.5px; text-align: center; }
 /* The sticky rail scrolls: its account pop-up must escape that scrollport. */
 .rh-shell[data-rh-appearance="ledger"] > .rh-rail .rh-rail__menu { position: fixed; left: 84px; right: auto; bottom: 8px; width: 240px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.rh-shell[data-rh-workspace="true"] > .rh-rail .rh-rail__account-meta { position: static; width: auto; height: auto; clip-path: none; white-space: normal; }
+.rh-shell[data-rh-workspace="true"] > .rh-rail .rh-rail__account-trigger { justify-content: flex-start; }
+.rh-shell[data-rh-workspace="true"] > .rh-rail .rh-rail__menu { left: 220px; }
 .rh-shell[data-rh-appearance="ledger"] .rh-banner { flex-wrap: wrap; gap: 12px; }
 .rh-shell[data-rh-appearance="ledger"] .rh-banner__lead { flex-wrap: wrap; gap: 12px; }
 .rh-shell[data-rh-appearance="ledger"] .rh-banner__wordmark { width: 160px; height: auto; margin: 8px 0; }

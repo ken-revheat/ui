@@ -1,5 +1,5 @@
 import { type PropType, type VNode } from "vue";
-import { type MeProduct, type ShellScreen } from "./core.js";
+import { type MeProduct, type ShellScreen, type PlatformWorkspace } from "./core.js";
 /**
  * Re-declared here rather than imported from `src/react.tsx` — importing it
  * would drag `"use client"` and the whole React import graph into
@@ -89,6 +89,10 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: PropType<ShellScreen[]>;
         default: () => never[];
     };
+    workspace: {
+        type: PropType<PlatformWorkspace | null>;
+        default: null;
+    };
 }>, () => VNode<import("vue").RendererNode, import("vue").RendererElement, {
     [key: string]: any;
 }>, {}, {}, {}, import("vue").ComponentOptionsMixin, import("vue").ComponentOptionsMixin, ("sign-out" | "navigate")[], "sign-out" | "navigate", import("vue").PublicProps, Readonly<import("vue").ExtractPropTypes<{
@@ -151,6 +155,10 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: PropType<ShellScreen[]>;
         default: () => never[];
     };
+    workspace: {
+        type: PropType<PlatformWorkspace | null>;
+        default: null;
+    };
 }>> & Readonly<{
     onNavigate?: ((...args: any[]) => any) | undefined;
     "onSign-out"?: ((...args: any[]) => any) | undefined;
@@ -165,6 +173,7 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
     screens: ShellScreen[];
     primaryAction: ShellScreen;
     utilityScreens: ShellScreen[];
+    workspace: PlatformWorkspace | null;
 }, {}, {}, {}, string, import("vue").ComponentProvideOptions, true, {}, any>;
 export default AppShell;
 //# sourceMappingURL=vue.d.ts.map
