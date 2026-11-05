@@ -162,9 +162,11 @@ export function workspaceScreens(workspace: PlatformWorkspace, currentUrl: strin
   let current: URL;
   try { current = new URL(currentUrl); } catch { return workspace.screens.map(s=>({...s,active:false})); }
   return workspace.screens.map(s=>({...s,active:[s.href,...(s.match??[])].some(href=>{
-    const target=new URL(href);
-    const path=target.pathname.replace(/\/$/,'');
-    return current.origin===target.origin && (current.pathname.replace(/\/$/,'')===path || current.pathname.startsWith(path+'/'));
+    let target: URL;
+    try { target = new URL(href, current); } catch { return false; }
+    const path = target.pathname.replace(/\/$/, '') || '/';
+    const currentPath = current.pathname.replace(/\/$/, '') || '/';
+    return current.origin === target.origin && (currentPath === path || (path !== '/' && currentPath.startsWith(path + '/')));
   })}));
 }
 

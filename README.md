@@ -291,3 +291,16 @@ B owns Call Analyzer's authorized Home → Deals → Calls → Team configuratio
 Analyze and Settings. Pin both exact reviewed package commits in its manifests
 and lockfile. Rollback reverts those pins and removes the opt-in props, imports
 and html attribute together. No stored-data migration or forced regeneration.
+
+### Platform workspace
+
+`workspace` is an optional `/api/me/products` projection. It changes the home link, brand title and rail; it never grants product access. Both Vue and React consumers pass the screen menu explicitly:
+
+```ts
+import { workspaceScreens } from "@revheat/ui/core";
+const screens = workspaceScreens(workspace, currentAbsoluteUrl);
+// Vue: <AppShell :workspace="workspace" :screens="screens" appearance="ledger" ... />
+// React: <AppShell workspace={workspace} screens={screens} appearance="ledger" ... />
+```
+
+Use the current absolute page URL so screens on different applications do not highlight each other. The hosted API emits absolute destinations; relative screen destinations resolve against that current URL. Malformed destinations are inactive. Passing `workspace` alone does not populate the screen menu; normal screen-count limits still apply. Both classic and Ledger appearances support workspace mode.

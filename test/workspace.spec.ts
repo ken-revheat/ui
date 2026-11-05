@@ -13,14 +13,21 @@ beforeEach(()=>{window.matchMedia=vi.fn().mockReturnValue({matches:false,addEven
 afterEach(()=>{document.body.innerHTML=''});
 describe('one platform workspace',()=>{
   it('replaces the product directory with the enabled workspace and Advisor',()=>{
-    const wrapper=mount(AppShell,{props:{identity:{email:'manager@example.test',isInternal:false,roleLabel:'Manager'},products:[],activePath:'/playbook',appearance:'ledger',workspace} as any});
+    const wrapper=mount(AppShell,{props:{identity:{email:'manager@example.test',isInternal:false,roleLabel:'Manager'},products:[],activePath:'/playbook',appearance:'ledger',workspace,screens:core.workspaceScreens(workspace,'https://app.revheat.com/playbook')} as any});
     expect(wrapper.text()).toContain('Ask RevHeat');
     expect(wrapper.text()).toContain('Platform');
+    expect(wrapper.find('.rh-menu a[aria-current="page"]').text()).toBe('Playbook');
     expect(wrapper.text()).not.toContain('All products');
     expect(wrapper.text()).not.toContain('Portal');
     expect(wrapper.text()).not.toContain('Tools');
     expect(wrapper.find('a[aria-label="RevHeat home"]').attributes('href')).toBe(workspace.homeHref);
     wrapper.unmount();
+  });
+  it('supports relative links without making a root screen active on every page',()=>{
+    const configured={...workspace,screens:[{id:'root',label:'Home',href:'/'},{id:'playbook',label:'Playbook',href:'/playbook'}]};
+    expect(core.workspaceScreens(configured,'https://app.revheat.com/playbook').filter(s=>s.active).map(s=>s.label)).toEqual(['Playbook']);
+    expect(core.workspaceScreens(configured,'https://app.revheat.com/').filter(s=>s.active).map(s=>s.label)).toEqual(['Home']);
+    expect(core.workspaceScreens({...workspace,screens:[{id:'invalid',label:'Invalid',href:'https://['}]},'https://app.revheat.com/')[0].active).toBe(false);
   });
   it('matches a destination by origin as well as path, including nested Team reports',()=>{
     const resolve=(core as any).workspaceScreens;
