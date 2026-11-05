@@ -86,6 +86,27 @@ export interface ShellScreen {
     active?: boolean;
     external?: boolean;
 }
+/** Additive /api/me/products workspace projection. Navigation never grants access. */
+export interface WorkspaceLink {
+    id: string;
+    label: string;
+    href: string;
+    match?: string[];
+}
+export interface PlatformWorkspace {
+    homeHref: string;
+    screens: WorkspaceLink[];
+    advisor: WorkspaceLink | null;
+    tools: Array<WorkspaceLink & {
+        code: string;
+    }>;
+    settingsHref: string;
+    personalHref: string | null;
+    playbookSettingsHref: string | null;
+}
+/** Absolute current URL prevents similarly named routes on different apps
+ * from highlighting each other. All links keep normal same-origin routing. */
+export declare function workspaceScreens(workspace: PlatformWorkspace, currentUrl: string): ShellScreen[];
 /**
  * Fills in `active` on every item. Two modes:
  *

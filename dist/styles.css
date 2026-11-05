@@ -225,9 +225,8 @@ a.rh-rail__link[aria-current="page"] {
 }
 
 /* ── Account block ──────────────────────────────────────────────────────
-   Pinned to the bottom via `.rh-row--all`'s margin-top: auto below — that row
-   always renders and always immediately precedes this block, so exactly one
-   auto margin survives and the pair stays pinned together. ── */
+   Standard mode uses the All products row’s auto margin. Workspace mode
+   uses the workspace navigation’s auto bottom margin to pin the account block. ── */
 .rh-rail__account {
   margin-top: 0;
   display: flex;
@@ -645,6 +644,13 @@ a.rh-row--all:hover {
 /* Ledger is explicitly selected; the classic shell's layout stays intact. */
 .rh-drawer[data-rh-appearance="ledger"] { font-family: var(--rh-font-ui, "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif); }
 .rh-shell[data-rh-appearance="ledger"] { grid-template-columns: 80px minmax(0, 1fr); }
+.rh-shell[data-rh-workspace="true"] { grid-template-columns: 216px minmax(0, 1fr); }
+.rh-workspace-links { margin-bottom: auto; display: flex; flex-direction: column; gap: 8px; padding: 16px 4px; }
+.rh-workspace-link, .rh-workspace-tools summary { display: block; padding: 12px; border-radius: 8px; color: var(--rh-workspace-text, var(--rh-ink, #19191e)); font-size: 14px; line-height: 1.4; text-decoration: none; cursor: pointer; }
+.rh-workspace-link:hover, .rh-workspace-link[aria-current="page"], .rh-workspace-tools summary:hover { color: var(--rh-workspace-hover-text, var(--rh-ink, #19191e)); background: var(--rh-workspace-hover-bg, var(--rh-n-100, #f0f0f3)); }
+.rh-workspace-link:focus-visible, .rh-workspace-tools summary:focus-visible { outline: 2px solid var(--rh-workspace-focus, var(--rh-focus-ring-color, #6143f9)); outline-offset: 2px; }
+[data-rh-appearance="ledger"] .rh-workspace-links { --rh-workspace-text: #C9C9D2; --rh-workspace-hover-text: #fff; --rh-workspace-hover-bg: #2A2A33; --rh-workspace-focus: #fff; }
+.rh-workspace-tools .rh-workspace-link { padding-left: 24px; }
 [data-rh-appearance="ledger"] .rh-rail { background: var(--rh-dark, #0B0B0F); color: var(--rh-on-dark, #C9C9D2); border-color: var(--rh-dark-border, #2A2A33); }
 [data-rh-appearance="ledger"] .rh-rail__home { justify-content: center; padding: 0.5rem 0; }
 [data-rh-appearance="ledger"] .rh-rail__mark { width: 36px; height: 36px; }
@@ -674,6 +680,9 @@ a.rh-row--all:hover {
 .rh-shell[data-rh-appearance="ledger"] > .rh-rail .rh-row--all { padding-inline: 2px; font-size: 10.5px; text-align: center; }
 /* The sticky rail scrolls: its account pop-up must escape that scrollport. */
 .rh-shell[data-rh-appearance="ledger"] > .rh-rail .rh-rail__menu { position: fixed; left: 84px; right: auto; bottom: 8px; width: 240px; max-height: calc(100dvh - 24px); overflow-y: auto; }
+.rh-shell[data-rh-workspace="true"] > .rh-rail .rh-rail__account-meta { position: static; width: auto; height: auto; clip-path: none; white-space: normal; }
+.rh-shell[data-rh-workspace="true"] > .rh-rail .rh-rail__account-trigger { justify-content: flex-start; }
+.rh-shell[data-rh-workspace="true"][data-rh-appearance="ledger"] > .rh-rail .rh-rail__menu { left: 220px; }
 .rh-shell[data-rh-appearance="ledger"] .rh-banner { flex-wrap: wrap; gap: 12px; }
 .rh-shell[data-rh-appearance="ledger"] .rh-banner__lead { flex-wrap: wrap; gap: 12px; }
 .rh-shell[data-rh-appearance="ledger"] .rh-banner__wordmark { width: 160px; height: auto; margin: 8px 0; }
@@ -704,7 +713,8 @@ a.rh-row--all:hover {
    takes over. `:not(.rh-rail--drawer)` matters — the drawer panel IS a
    `.rh-rail`, and hiding it here would leave the menu button opening nothing. ── */
 @media (max-width: 900px) {
-  .rh-shell {
+  .rh-shell,
+  .rh-shell[data-rh-workspace="true"] {
     grid-template-columns: 1fr;
   }
   .rh-rail:not(.rh-rail--drawer) {
@@ -725,7 +735,8 @@ a.rh-row--all:hover {
   .rh-footer {
     display: none;
   }
-  .rh-shell {
+  .rh-shell,
+  .rh-shell[data-rh-workspace="true"] {
     grid-template-columns: 1fr;
   }
 }

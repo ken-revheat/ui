@@ -9,6 +9,7 @@ import {
   PORTAL_ORIGIN,
   ALL_PRODUCTS_HREF,
   productTitle,
+  type PlatformWorkspace,
   resolveShellNavigation,
   type MeProduct,
   type RailProduct,
@@ -102,6 +103,7 @@ export interface AppShellProps {
   /** Consumer-filtered navigation; does not grant access or infer roles. */
   primaryAction?: ShellScreen;
   utilityScreens?: ShellScreen[];
+  workspace?: PlatformWorkspace | null;
   /**
    * Client-side navigation hook. When present, a plain left-click on a
    * same-origin link is intercepted (`preventDefault`) and `onNavigate(href)`
@@ -775,6 +777,7 @@ export function AppShell({
   appearance = "classic",
   primaryAction,
   utilityScreens = [],
+  workspace = null,
   onNavigate,
   headerActions,
   accountMenu,
@@ -861,7 +864,8 @@ export function AppShell({
   }, [isNarrow, dismissDrawer]);
 
   const isStaff = identity.isStaff ?? identity.isInternal;
-  const title = productTitle(currentProductCode, PRODUCT_CATALOG);
+  const title = workspace ? 'Platform' : productTitle(currentProductCode, PRODUCT_CATALOG);
+  const homeHref = workspace?.homeHref ?? `${PORTAL_ORIGIN}/`;
   const navigation = resolveShellNavigation(screens ?? [], primaryAction, utilityScreens, activePath);
   const menuItems = screens && (screens.length >= 2 || primaryAction) ? navigation.screens : [];
   const mobileAction = appearance === "ledger" && isNarrow;
@@ -899,14 +903,21 @@ export function AppShell({
     <>
       <a
         className="rh-rail__home"
-        href={`${PORTAL_ORIGIN}/`}
+        href={homeHref}
         aria-label="RevHeat home"
-        onClick={navOn(`${PORTAL_ORIGIN}/`)}
+        onClick={navOn(homeHref)}
       >
         {appearance === "ledger" ? <LedgerBrand kind="icon" className="rh-rail__mark" /> : <BrandMarkR />}
       </a>
 
-      {model.entitled.length > 0 && (
+      {workspace ? <nav className="rh-workspace-links" aria-label="Workspace">
+        {screenLink({label:'Workspace',href:homeHref},'rh-workspace-link')}
+        {workspace.advisor && screenLink(workspace.advisor,'rh-workspace-link')}
+        {workspace.personalHref && screenLink({label:'My work',href:workspace.personalHref},'rh-workspace-link')}
+        {workspace.tools.length>0 && <details className="rh-workspace-tools"><summary>Tools</summary>
+          {workspace.tools.map(t=>screenLink({...t,label:productTitle(t.code,PRODUCT_CATALOG)??t.label},'rh-workspace-link'))}
+        </details>}
+      </nav> : model.entitled.length > 0 && (
         <nav className="rh-rail__section" aria-label="Your products">
           <p className="rh-rail__heading">Your products</p>
           <ul>
@@ -923,13 +934,13 @@ export function AppShell({
         </nav>
       )}
 
-      <a
+      {!workspace && <a
         className="rh-row rh-row--all"
         href={ALL_PRODUCTS_HREF}
         onClick={navOn(ALL_PRODUCTS_HREF)}
       >
         All products →
-      </a>
+      </a>}
 
       <div className="rh-rail__account">
         {accountMenu ?? (
@@ -946,7 +957,7 @@ export function AppShell({
   );
 
   return (
-    <div className="rh-shell" data-rh-appearance={appearance}>
+    <div className="rh-shell" data-rh-appearance={appearance} data-rh-workspace={workspace ? 'true' : undefined}>
       {/*
         Rendered only on wide viewports. `isNarrow` starts false so the server
         and the first client render agree; the CSS rule at the bottom of
@@ -990,18 +1001,18 @@ export function AppShell({
             >
               <StrokeIcon className="rh-banner__menu-glyph" d={MENU_ICON} />
             </button>
-            <a
+            {!workspace && <a
               className="rh-banner__portal"
               href={ALL_PRODUCTS_HREF}
               onClick={navOn(ALL_PRODUCTS_HREF)}
             >
               <span aria-hidden>←</span> Portal
-            </a>
+            </a>}
             <a
               className="rh-banner__brand"
-              href={`${PORTAL_ORIGIN}/`}
+              href={homeHref}
               aria-label="RevHeat home"
-              onClick={navOn(`${PORTAL_ORIGIN}/`)}
+              onClick={navOn(homeHref)}
             >
               {appearance === "ledger" ? <LedgerBrand kind="wordmark" className="rh-banner__wordmark" /> : <BrandWordmark />}
             </a>

@@ -73,6 +73,29 @@ export const PORTAL_ORIGIN = "https://app.revheat.com";
 export function upgradeHref(slug, source) {
     return `${PORTAL_ORIGIN}/products/${slug}/upgrade?source=${source}`;
 }
+/** Absolute current URL prevents similarly named routes on different apps
+ * from highlighting each other. All links keep normal same-origin routing. */
+export function workspaceScreens(workspace, currentUrl) {
+    let current;
+    try {
+        current = new URL(currentUrl);
+    }
+    catch {
+        return workspace.screens.map(s => ({ ...s, active: false }));
+    }
+    return workspace.screens.map(s => ({ ...s, active: [s.href, ...(s.match ?? [])].some(href => {
+            let target;
+            try {
+                target = new URL(href, current);
+            }
+            catch {
+                return false;
+            }
+            const path = target.pathname.replace(/\/$/, '') || '/';
+            const currentPath = current.pathname.replace(/\/$/, '') || '/';
+            return current.origin === target.origin && (currentPath === path || (path !== '/' && currentPath.startsWith(path + '/')));
+        }) }));
+}
 /**
  * Fills in `active` on every item. Two modes:
  *
