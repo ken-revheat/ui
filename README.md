@@ -245,17 +245,37 @@ install` inside the cloned git-dep, which pulls this package's devDependencies
 and crashes arborist for consumers. The compile step is deliberately named
 `compile` instead.
 
+## Account menu holds settings and admin (v2.5.0)
+
+The header no longer renders `utilityScreens` links or the staff Admin link.
+Both props are still accepted, so existing callers compile; `utilityScreens`
+is `@deprecated` and is only consulted for active-screen resolution. The
+account (name) menu in the lower-left rail now lists, in order:
+
+| Item | Destination | Shown when |
+|---|---|---|
+| My account | `https://app.revheat.com/account` | always |
+| My connections | `https://app.revheat.com/integrations` | always |
+| Company settings | `https://app.revheat.com/settings` | `viewerRole` is `"manager"` or `"admin"` |
+| Manage products | `https://app.revheat.com/` | always |
+| RevHeat staff admin | `adminHref` | staff (`isStaff ?? isInternal`) **and** `adminHref` set |
+| Sign out | unchanged | always |
+
+"Team & Access" is gone. Company settings reads the `viewerRole` prop exactly
+as passed: an app that sends no role shows no Company settings (fails closed).
+Pass `viewerRole` from `GET /api/me/products` to give managers and admins the
+link.
+
 ## Ledger presentation (v2.4.0, opt in)
 
 ```tsx
 <AppShell appearance="ledger" {...existingIdentityAndProductProps}
   screens={authorizedScreens}
   primaryAction={{ label: 'Analyze a call', href: '/app/analyze' }}
-  utilityScreens={[{ label: 'Settings', href: '/app/settings' }]}
   onNavigate={href => router.push(href)}>{children}</AppShell>
 ```
 
-Vue takes the same prop names (`:primary-action`, `:utility-screens`) and
+Vue takes the same prop names (`:primary-action`) and
 continues to emit `navigate`. `header-actions`/React `headerActions` is unchanged.
 These links use `ShellScreen` from `@revheat/ui/core` (`label`, `href`, optional
 `active`/`external`). No permission is granted by a link: the app filters its
@@ -277,7 +297,8 @@ not also select Home. If **any** item has explicit `active`, the existing explic
 mode applies to the whole configuration: apps using explicit screen flags must
 also provide explicit utility/action flags. No arrays or items are mutated.
 The old fewer-than-two screen-tab behavior remains unless primaryAction is set;
-an action alone still renders. Utilities always render in the header.
+an action alone still renders. From v2.5.0 utilities are no longer rendered
+(see above); `utilityScreens` is deprecated and only feeds active resolution.
 
 Ledger desktop uses an 80px dark product rail, a 160px original wordmark and
 top screen navigation. At <=900px the product drawer retains its focus trap,

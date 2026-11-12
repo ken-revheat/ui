@@ -55,6 +55,10 @@ export interface AppShellProps {
      * work off-portal.
      */
     currentProductCode?: string;
+    /**
+     * Where staff admin lives. Shown as "RevHeat staff admin" in the account
+     * menu, only for staff. Since v2.5.0 the header no longer links it.
+     */
     adminHref?: string;
     /** In-product screens render with 2+ items, or with a primaryAction. */
     screens?: ShellScreen[];
@@ -62,6 +66,13 @@ export interface AppShellProps {
     appearance?: "classic" | "ledger";
     /** Consumer-filtered navigation; does not grant access or infer roles. */
     primaryAction?: ShellScreen;
+    /**
+     * @deprecated Since v2.5.0 utility screens are no longer rendered — the
+     * header carries no settings links; account, connection and company
+     * settings live in the account menu. Still accepted so existing callers
+     * compile, and still consulted for active-screen resolution only (a utility
+     * route never leaves another tab looking selected).
+     */
     utilityScreens?: ShellScreen[];
     workspace?: PlatformWorkspace | null;
     /**

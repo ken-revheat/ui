@@ -157,40 +157,79 @@ describe("account menu", () => {
     expect(screen.getByRole("menu")).toBeTruthy();
   });
 
-  it("lists the portal's items, absolutely resolved, with no Admin for a normal member", () => {
-    renderShell();
+  const menuLabels = () => screen.getAllByRole("menuitem").map((el) => el.textContent);
+  const menuHref = (name: string) =>
+    within(screen.getByRole("menu")).getByRole("menuitem", { name }).getAttribute("href");
+
+  it("lists a rep's items, absolutely resolved, with no company settings and no staff admin", () => {
+    renderShell({ viewerRole: "rep", isPrimaryBuyer: false });
     fireEvent.click(accountTrigger());
-    const items = screen.getAllByRole("menuitem");
-    expect(items.map((el) => el.textContent)).toEqual([
-      "Account settings",
-      "Team & Access",
-      "Manage products",
-      "Sign out",
-    ]);
+    expect(menuLabels()).toEqual(["My account", "My connections", "Manage products", "Sign out"]);
     // A product app is on its own origin — a relative href would 404 there.
-    expect(items[0]!.getAttribute("href")).toBe("https://app.revheat.com/account");
-    expect(items[2]!.getAttribute("href")).toBe("https://app.revheat.com/");
+    expect(menuHref("My account")).toBe("https://app.revheat.com/account");
+    expect(menuHref("My connections")).toBe("https://app.revheat.com/integrations");
+    expect(menuHref("Manage products")).toBe("https://app.revheat.com/");
   });
 
-  it("adds Admin for staff", () => {
-    renderShell({ identity: { ...member, isStaff: true }, adminHref: "https://app.revheat.com/admin/orgs" });
+  it("hides Company settings when the app sends no role (fails closed)", () => {
+    renderShell();
     fireEvent.click(accountTrigger());
-    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Admin" })).toBeTruthy();
+    expect(menuLabels()).toEqual(["My account", "My connections", "Manage products", "Sign out"]);
+  });
+
+  for (const role of ["manager", "admin"] as const) {
+    it(`adds Company settings for a ${role}`, () => {
+      renderShell({ viewerRole: role, isPrimaryBuyer: true });
+      fireEvent.click(accountTrigger());
+      expect(menuLabels()).toEqual([
+        "My account",
+        "My connections",
+        "Company settings",
+        "Manage products",
+        "Sign out",
+      ]);
+      expect(menuHref("Company settings")).toBe("https://app.revheat.com/settings");
+    });
+  }
+
+  it("adds RevHeat staff admin last, before Sign out, for staff with an adminHref", () => {
+    renderShell({
+      identity: { ...member, isStaff: true },
+      viewerRole: "admin",
+      isPrimaryBuyer: true,
+      adminHref: "https://app.revheat.com/admin/orgs",
+    });
+    fireEvent.click(accountTrigger());
+    expect(menuLabels()).toEqual([
+      "My account",
+      "My connections",
+      "Company settings",
+      "Manage products",
+      "RevHeat staff admin",
+      "Sign out",
+    ]);
+    expect(menuHref("RevHeat staff admin")).toBe("https://app.revheat.com/admin/orgs");
   });
 
   it("treats an internal org as staff when the app does not send the staff flag", () => {
     renderShell({ identity: { ...member, isInternal: true }, adminHref: "/admin/orgs" });
     fireEvent.click(accountTrigger());
-    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "Admin" })).toBeTruthy();
+    expect(within(screen.getByRole("menu")).getByRole("menuitem", { name: "RevHeat staff admin" })).toBeTruthy();
   });
 
-  it("hides Admin from staff until the app says where Admin lives", () => {
-    // Same gate as the header link. Defaulting the href would have switched
-    // Admin on for every RevHeat-org member in every app that bumps this
-    // package, with no code change on their side.
+  it("hides RevHeat staff admin from staff until the app says where Admin lives", () => {
+    // Defaulting the href would have switched Admin on for every RevHeat-org
+    // member in every app that bumps this package, with no code change on
+    // their side.
     renderShell({ identity: { ...member, isStaff: true } });
     fireEvent.click(accountTrigger());
-    expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "Admin" })).toBeNull();
+    expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "RevHeat staff admin" })).toBeNull();
+  });
+
+  it("never offers RevHeat staff admin to a non-staff viewer, even with an adminHref", () => {
+    renderShell({ viewerRole: "admin", isPrimaryBuyer: true, adminHref: "/admin/orgs" });
+    fireEvent.click(accountTrigger());
+    expect(within(screen.getByRole("menu")).queryByRole("menuitem", { name: "RevHeat staff admin" })).toBeNull();
   });
 
   it("signs out through the portal by default, because a product app cannot clear the portal cookie", () => {
@@ -914,7 +953,7 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
 
   it("routes the account-menu items but never Sign out", () => {
     const onNavigate = renderAsPortal({ onSignOut: () => {} });
-    for (const label of ["Account settings", "Team & Access", "Manage products"]) {
+    for (const label of ["My account", "My connections", "Manage products"]) {
       // Reopened each pass: from v2.2.0 an in-app route CLOSES the pop-up
       // (see the next test), so the menu is gone after the first click.
       fireEvent.click(accountTrigger());
@@ -954,7 +993,7 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
     const onNavigate = renderAsPortal({ onSignOut: () => {} });
     fireEvent.click(accountTrigger());
     expect(screen.getByRole("menu")).toBeTruthy();
-    clickPlain(screen.getByRole("menuitem", { name: "Account settings" }));
+    clickPlain(screen.getByRole("menuitem", { name: "My account" }));
     expect(onNavigate).toHaveBeenCalledWith("/account");
     expect(screen.queryByRole("menu")).toBeNull();
     expect(accountTrigger().getAttribute("aria-expanded")).toBe("false");
@@ -966,7 +1005,7 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
     // is still looking at must stay put.
     const onNavigate = renderAsPortal({ onSignOut: () => {} });
     fireEvent.click(accountTrigger());
-    const item = screen.getByRole("menuitem", { name: "Account settings" });
+    const item = screen.getByRole("menuitem", { name: "My account" });
     const ev = new MouseEvent("click", {
       bubbles: true,
       cancelable: true,
@@ -981,7 +1020,7 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
     expect(screen.getByRole("menu")).toBeTruthy();
   });
 
-  it("routes the banner's Admin link, including a RELATIVE adminHref", () => {
+  it("routes the account menu's RevHeat staff admin item, including a RELATIVE adminHref", () => {
     // `adminHref` is the only consumer-supplied href in the intercepted set,
     // so it is the only one that can be relative — and a relative href is
     // same-origin in EVERY app, not just the portal. That is the contract
@@ -991,25 +1030,27 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
       identity: { ...member, isStaff: true },
       adminHref: "/admin/orgs",
     });
-    const link = document.querySelector<HTMLAnchorElement>(".rh-banner__admin")!;
+    fireEvent.click(accountTrigger());
+    const link = screen.getByRole("menuitem", { name: "RevHeat staff admin" });
     expect(link.getAttribute("href")).toBe("/admin/orgs");
     expect(clickPlain(link).defaultPrevented).toBe(true);
     expect(onNavigate).toHaveBeenCalledWith("/admin/orgs");
   });
 
-  it("routes the banner's Admin link when it is the absolute portal URL", () => {
+  it("routes the account menu's RevHeat staff admin item when it is the absolute portal URL", () => {
     // What all five product consumers actually pass. It is same-origin ONLY
     // here, inside the portal.
     const onNavigate = renderAsPortal({
       identity: { ...member, isStaff: true },
       adminHref: "https://app.revheat.com/admin/orgs",
     });
-    const link = document.querySelector<HTMLAnchorElement>(".rh-banner__admin")!;
+    fireEvent.click(accountTrigger());
+    const link = screen.getByRole("menuitem", { name: "RevHeat staff admin" });
     expect(clickPlain(link).defaultPrevented).toBe(true);
     expect(onNavigate).toHaveBeenCalledWith("/admin/orgs");
   });
 
-  it("leaves the banner's Admin link alone in a product app, where it is off-origin", () => {
+  it("leaves the account menu's RevHeat staff admin item alone in a product app, where it is off-origin", () => {
     // No `asPortal()` — this is Trend Finder / ICP / QuotaFit, on their own
     // origin. Routing app.revheat.com/admin/orgs through THEIR router would
     // land on their own 404. (happy-dom really follows the un-prevented
@@ -1021,7 +1062,8 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
       currentProductCode: "trend_finder",
       onNavigate,
     });
-    const link = document.querySelector<HTMLAnchorElement>(".rh-banner__admin")!;
+    fireEvent.click(accountTrigger());
+    const link = screen.getByRole("menuitem", { name: "RevHeat staff admin" });
     expect(clickPlain(link).defaultPrevented).toBe(false);
     expect(onNavigate).not.toHaveBeenCalled();
   });
@@ -1076,7 +1118,7 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
     // Same contract as the drawer test: how the listener's exception surfaces
     // is the DOM implementation's business, the close is ours.
     try {
-      clickPlain(screen.getByRole("menuitem", { name: "Account settings" }));
+      clickPlain(screen.getByRole("menuitem", { name: "My account" }));
     } catch {
       /* the consumer's error, on whichever path it takes */
     }
@@ -1171,7 +1213,7 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
       // bounce focus somewhere the phone user cannot see.
       const { onNavigate, drawer } = openDrawer();
       fireEvent.click(accountTrigger(drawer));
-      clickPlain(screen.getByRole("menuitem", { name: "Account settings" }));
+      clickPlain(screen.getByRole("menuitem", { name: "My account" }));
       expect(onNavigate).toHaveBeenCalledWith("/account");
       expect(screen.queryByRole("menu")).toBeNull();
       expect(screen.getByRole("button", { name: "Open product menu" }).getAttribute("aria-expanded")).toBe(
@@ -1235,8 +1277,36 @@ describe("client-side navigation reaches the whole rail (v2.2)", () => {
 });
 
 
+describe("header no longer carries settings or admin links (v2.5.0)", () => {
+  it("renders no utility links and no Admin link even when utilityScreens and adminHref are passed", () => {
+    renderShell({
+      identity: { ...member, isStaff: true },
+      viewerRole: "admin",
+      isPrimaryBuyer: true,
+      adminHref: "https://app.revheat.com/admin/orgs",
+      utilityScreens: [
+        { label: "Settings", href: "/app/settings" },
+        { label: "Integrations", href: "/app/integrations" },
+      ],
+    });
+    const header = document.querySelector("header")!;
+    expect(header).not.toBeNull();
+    expect(header.querySelector(".rh-banner__utilities")).toBeNull();
+    expect(header.querySelector(".rh-banner__utility")).toBeNull();
+    expect(header.querySelector(".rh-banner__admin")).toBeNull();
+    expect(within(header).queryByRole("link", { name: "Settings" })).toBeNull();
+    expect(within(header).queryByRole("link", { name: "Integrations" })).toBeNull();
+    expect(within(header).queryByRole("link", { name: /admin/i })).toBeNull();
+    // Admin is still reachable — from the account menu.
+    fireEvent.click(accountTrigger());
+    expect(screen.getByRole("menuitem", { name: "RevHeat staff admin" }).getAttribute("href")).toBe(
+      "https://app.revheat.com/admin/orgs",
+    );
+  });
+});
+
 describe("Ledger navigation contract", () => {
-  it("keeps product screen configuration and places Analyze and Settings separately", async () => {
+  it("keeps product screen configuration, places Analyze, and no longer renders utility screens", async () => {
     const navigate = vi.fn();
     renderShell({
       appearance: "ledger",
@@ -1248,9 +1318,10 @@ describe("Ledger navigation contract", () => {
     });
     const menu = screen.getByRole("navigation", { name: "Screens" });
     expect(within(menu).getAllByRole("link").map(el => el.textContent)).toEqual(["Home", "Deals", "Analyze a call"]);
-    const settings = screen.getByRole("link", { name: "Settings" });
-    expect(settings.closest("header")).not.toBeNull();
-    expect(settings.getAttribute("aria-current")).toBe("page");
+    // From v2.5.0 utility screens are no longer rendered — settings live in
+    // the account menu — but they still count for active resolution, so being
+    // ON a utility route never leaves Home looking selected.
+    expect(screen.queryByRole("link", { name: "Settings" })).toBeNull();
     expect(menu.querySelector('[aria-current="page"]')).toBeNull();
     fireEvent.click(screen.getByRole("link", { name: "Analyze a call" }));
     expect(navigate).toHaveBeenCalledWith("/app/analyze");

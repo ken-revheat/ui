@@ -68,6 +68,10 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: StringConstructor;
         default: undefined;
     };
+    /**
+     * Where staff admin lives. Shown as "RevHeat staff admin" in the account
+     * menu, only for staff. Since v2.5.0 the header no longer links it.
+     */
     adminHref: {
         type: StringConstructor;
         default: undefined;
@@ -85,6 +89,13 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: PropType<ShellScreen>;
         default: undefined;
     };
+    /**
+     * @deprecated Since v2.5.0 utility screens are no longer rendered — the
+     * header carries no settings links; account, connection and company
+     * settings live in the account menu. Still accepted so existing callers
+     * compile, and still consulted for active-screen resolution only (a
+     * utility route never leaves another tab looking selected).
+     */
     utilityScreens: {
         type: PropType<ShellScreen[]>;
         default: () => never[];
@@ -134,6 +145,10 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: StringConstructor;
         default: undefined;
     };
+    /**
+     * Where staff admin lives. Shown as "RevHeat staff admin" in the account
+     * menu, only for staff. Since v2.5.0 the header no longer links it.
+     */
     adminHref: {
         type: StringConstructor;
         default: undefined;
@@ -151,6 +166,13 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
         type: PropType<ShellScreen>;
         default: undefined;
     };
+    /**
+     * @deprecated Since v2.5.0 utility screens are no longer rendered — the
+     * header carries no settings links; account, connection and company
+     * settings live in the account menu. Still accepted so existing callers
+     * compile, and still consulted for active-screen resolution only (a
+     * utility route never leaves another tab looking selected).
+     */
     utilityScreens: {
         type: PropType<ShellScreen[]>;
         default: () => never[];
@@ -165,8 +187,8 @@ export declare const AppShell: import("vue").DefineComponent<import("vue").Extra
 }>, {
     currentProductCode: string;
     adminHref: string;
-    appearance: "classic" | "ledger";
     viewerRole: "rep" | "manager" | "admin";
+    appearance: "classic" | "ledger";
     isPrimaryBuyer: boolean | undefined;
     degraded: boolean;
     productCodesFallback: string[];
