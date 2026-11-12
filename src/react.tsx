@@ -95,6 +95,10 @@ export interface AppShellProps {
    * work off-portal.
    */
   currentProductCode?: string;
+  /**
+   * Where staff admin lives. Shown as "RevHeat staff admin" in the account
+   * menu, only for staff. Since v2.5.0 the header no longer links it.
+   */
   adminHref?: string;
   /** In-product screens render with 2+ items, or with a primaryAction. */
   screens?: ShellScreen[];
@@ -102,6 +106,13 @@ export interface AppShellProps {
   appearance?: "classic" | "ledger";
   /** Consumer-filtered navigation; does not grant access or infer roles. */
   primaryAction?: ShellScreen;
+  /**
+   * @deprecated Since v2.5.0 utility screens are no longer rendered — the
+   * header carries no settings links; account, connection and company
+   * settings live in the account menu. Still accepted so existing callers
+   * compile, and still consulted for active-screen resolution only (a utility
+   * route never leaves another tab looking selected).
+   */
   utilityScreens?: ShellScreen[];
   workspace?: PlatformWorkspace | null;
   /**
@@ -382,32 +393,44 @@ interface AccountMenuProps {
   identity: AppShellIdentity;
   isStaff: boolean;
   adminHref?: string;
+  viewerRole?: "rep" | "manager" | "admin";
   onSignOut?: () => void;
   navOn: NavOn;
 }
 
-// Same items, same order and same destinations as the portal's own account menu
-// (RhSidebarRail.vue). "Account settings" and "Team & Access" both point at
-// /account on purpose — that page owns both — and Admin is repeated here even
-// though the header shows it too. Matching the portal exactly is the point.
+// From v2.5.0 this menu is the ONE home for account, company and admin links;
+// the header no longer carries utility-screen links or an Admin link.
 //
-// Admin needs BOTH the staff flag and an explicit `adminHref`, exactly like the
-// header link. Defaulting the href would have made every app that bumps this
-// package start showing Admin to anyone in a RevHeat org, with no code change
-// on their side — a behaviour change nobody opted into.
-function accountItemsFor(isStaff: boolean, adminHref?: string) {
+// "Company settings" is shown only for an explicit manager/admin `viewerRole`.
+// It deliberately reads the RAW prop, not the legacy guess (internal ⇒ admin,
+// else manager) the rail model falls back to: an app that has not adopted
+// `viewerRole` must not start offering every rep a settings page the portal
+// would refuse. Unknown role ⇒ hidden (fail closed).
+//
+// "RevHeat staff admin" needs BOTH the staff flag and an explicit `adminHref`.
+// Defaulting the href would have made every app that bumps this package start
+// showing Admin to anyone in a RevHeat org, with no code change on their side —
+// a behavior change nobody opted into.
+function accountItemsFor(
+  isStaff: boolean,
+  adminHref: string | undefined,
+  viewerRole: "rep" | "manager" | "admin" | undefined,
+) {
   const items = [
-    { key: "account", label: "Account settings", href: `${PORTAL_ORIGIN}/account` },
-    { key: "team", label: "Team & Access", href: `${PORTAL_ORIGIN}/account` },
-    { key: "products", label: "Manage products", href: `${PORTAL_ORIGIN}/` },
+    { key: "account", label: "My account", href: `${PORTAL_ORIGIN}/account` },
+    { key: "connections", label: "My connections", href: `${PORTAL_ORIGIN}/integrations` },
   ];
+  if (viewerRole === "manager" || viewerRole === "admin") {
+    items.push({ key: "company", label: "Company settings", href: `${PORTAL_ORIGIN}/settings` });
+  }
+  items.push({ key: "products", label: "Manage products", href: `${PORTAL_ORIGIN}/` });
   if (isStaff && adminHref) {
-    items.push({ key: "admin", label: "Admin", href: adminHref });
+    items.push({ key: "admin", label: "RevHeat staff admin", href: adminHref });
   }
   return items;
 }
 
-function AccountMenu({ identity, isStaff, adminHref, onSignOut, navOn }: AccountMenuProps) {
+function AccountMenu({ identity, isStaff, adminHref, viewerRole, onSignOut, navOn }: AccountMenuProps) {
   const [open, setOpen] = React.useState(false);
   const menuId = React.useId();
   const rootRef = React.useRef<HTMLDivElement | null>(null);
@@ -415,7 +438,7 @@ function AccountMenu({ identity, isStaff, adminHref, onSignOut, navOn }: Account
   const menuRef = React.useRef<HTMLDivElement | null>(null);
 
   const initial = (identity.email ?? "?").charAt(0).toUpperCase();
-  const items = accountItemsFor(isStaff, adminHref);
+  const items = accountItemsFor(isStaff, adminHref, viewerRole);
 
   // Built in an effect, not during render: `window.location.origin` differs
   // between the server and the browser, and an href that changes between the
@@ -948,6 +971,7 @@ export function AppShell({
             identity={identity}
             isStaff={isStaff}
             adminHref={adminHref}
+            viewerRole={viewerRole}
             onSignOut={onSignOut}
             navOn={navOn}
           />
@@ -1018,26 +1042,9 @@ export function AppShell({
             </a>
             {title !== undefined && <span className="rh-banner__product">{title}</span>}
           </div>
-          {navigation.utilityScreens.length > 0 && <nav className="rh-banner__utilities" aria-label="Utilities">
-            {navigation.utilityScreens.map(s => screenLink(s, "rh-banner__utility"))}
-          </nav>}
           {mobileAction && navigation.primaryAction && screenLink(navigation.primaryAction, "rh-menu__action")}
           {headerActions == null ? null : (
             <div className="rh-banner__actions">{headerActions}</div>
-          )}
-          {isStaff && adminHref && (
-            /* Same href as the account menu's "Admin" item, so it gets the
-               same treatment — one shell must not give one link two
-               behaviours. `adminHref` is the only consumer-supplied href in
-               the intercepted set, so it is also the only one that can be
-               RELATIVE, i.e. same-origin in every app rather than just the
-               portal. That is the documented contract (same origin + a
-               navigate hook = route in-app), not an exception: all five
-               React/Vue consumers pass an absolute app.revheat.com URL today
-               and are unaffected. */
-            <a className="rh-banner__admin" href={adminHref} onClick={navOn(adminHref)}>
-              Admin
-            </a>
           )}
         </header>
         {(menuItems.length > 0 || (!mobileAction && navigation.primaryAction)) && (

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { AppShell } from "../src/react";
 
 const products = [
@@ -32,18 +32,20 @@ describe("AppShell", () => {
     expect(screen.queryByText(/ICP Builder/)).toBeNull();
   });
 
-  it("shows the Admin banner link only when isInternal", () => {
+  it("offers RevHeat staff admin in the account menu only when isInternal, never as a header link", () => {
     const { rerender } = render(
       <AppShell identity={{ email: "x@y.com", isInternal: false, roleLabel: null }} products={[]} activePath="/app" adminHref="/admin/orgs">
         <main />
       </AppShell>
     );
-    expect(screen.queryByRole("link", { name: /Admin/ })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /x@y\.com/ }));
+    expect(screen.queryByRole("menuitem", { name: "RevHeat staff admin" })).toBeNull();
     rerender(
       <AppShell identity={{ email: "x@y.com", isInternal: true, roleLabel: "Admin" }} products={[]} activePath="/app" adminHref="/admin/orgs">
         <main />
       </AppShell>
     );
-    expect(screen.getByRole("link", { name: /Admin/ })).toBeTruthy();
+    expect(screen.getByRole("menuitem", { name: "RevHeat staff admin" }).getAttribute("href")).toBe("/admin/orgs");
+    expect(within(document.querySelector("header")!).queryByRole("link", { name: /Admin/ })).toBeNull();
   });
 });

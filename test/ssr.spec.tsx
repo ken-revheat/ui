@@ -90,7 +90,6 @@ const EXPECTED_HREFS = [
   "https://app.revheat.com/vault?source=sidebar",
   "https://trends.revheat.com/app?source=sidebar",
   "https://app.revheat.com/?source=sidebar",
-  "/admin/orgs",
   "/vault/reports",
 ];
 
@@ -101,6 +100,11 @@ function assertServerHtml(html: string) {
   // The normalised in-app form must not appear as a rendered href.
   expect(html).not.toContain('href="/vault?source=sidebar"');
   expect(html).not.toContain("onclick");
+  // From v2.5.0 the header carries no Admin link: `adminHref` (passed above,
+  // with a staff identity) renders only inside the account menu, which is
+  // closed on a server render.
+  expect(html).not.toContain('href="/admin/orgs"');
+  expect(html).not.toContain("rh-banner__admin");
 }
 
 describe("server render (no document)", () => {

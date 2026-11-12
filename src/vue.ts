@@ -248,24 +248,34 @@ function entitledRowVNode(
 /* account menu — mirrors src/react.tsx AccountMenu (337-519)          */
 /* ------------------------------------------------------------------ */
 
-// Same items, same order and same destinations as the portal's own account
-// menu (RhSidebarRail.vue). "Account settings" and "Team & Access" both point
-// at /account on purpose — that page owns both — and Admin is repeated here
-// even though the header shows it too. Matching the portal exactly is the
-// point.
+// From v2.5.0 this menu is the ONE home for account, company and admin links;
+// the header no longer carries utility-screen links or an Admin link.
 //
-// Admin needs BOTH the staff flag and an explicit `adminHref`, exactly like
-// the header link. Defaulting the href would have made every app that bumps
-// this package start showing Admin to anyone in a RevHeat org, with no code
-// change on their side — a behaviour change nobody opted into.
-function accountItemsFor(isStaff: boolean, adminHref?: string) {
+// "Company settings" is shown only for an explicit manager/admin `viewerRole`.
+// It deliberately reads the RAW prop, not the legacy guess (internal ⇒ admin,
+// else manager) the rail model falls back to: an app that has not adopted
+// `viewerRole` must not start offering every rep a settings page the portal
+// would refuse. Unknown role ⇒ hidden (fail closed).
+//
+// "RevHeat staff admin" needs BOTH the staff flag and an explicit `adminHref`.
+// Defaulting the href would have made every app that bumps this package start
+// showing Admin to anyone in a RevHeat org, with no code change on their side —
+// a behavior change nobody opted into.
+function accountItemsFor(
+  isStaff: boolean,
+  adminHref: string | undefined,
+  viewerRole: "rep" | "manager" | "admin" | undefined,
+) {
   const items = [
-    { key: "account", label: "Account settings", href: `${PORTAL_ORIGIN}/account` },
-    { key: "team", label: "Team & Access", href: `${PORTAL_ORIGIN}/account` },
-    { key: "products", label: "Manage products", href: `${PORTAL_ORIGIN}/` },
+    { key: "account", label: "My account", href: `${PORTAL_ORIGIN}/account` },
+    { key: "connections", label: "My connections", href: `${PORTAL_ORIGIN}/integrations` },
   ];
+  if (viewerRole === "manager" || viewerRole === "admin") {
+    items.push({ key: "company", label: "Company settings", href: `${PORTAL_ORIGIN}/settings` });
+  }
+  items.push({ key: "products", label: "Manage products", href: `${PORTAL_ORIGIN}/` });
   if (isStaff && adminHref) {
-    items.push({ key: "admin", label: "Admin", href: adminHref });
+    items.push({ key: "admin", label: "RevHeat staff admin", href: adminHref });
   }
   return items;
 }
@@ -276,6 +286,7 @@ const RhAccountMenu = defineComponent({
     identity: { type: Object as PropType<AppShellIdentity>, required: true },
     isStaff: { type: Boolean, default: false },
     adminHref: { type: String, default: undefined },
+    viewerRole: { type: String as PropType<"rep" | "manager" | "admin">, default: undefined },
     // Whether the parent AppShell has a `sign-out` listener attached. Passed
     // in rather than inferred here, because "does the CONSUMER's AppShell
     // have an onSignOut listener" is only knowable from AppShell's own
@@ -410,7 +421,7 @@ const RhAccountMenu = defineComponent({
 
     return () => {
       const initial = (props.identity.email ?? "?").charAt(0).toUpperCase();
-      const items = accountItemsFor(props.isStaff, props.adminHref);
+      const items = accountItemsFor(props.isStaff, props.adminHref, props.viewerRole);
       return h("div", { class: "rh-rail__account-menu", ref: rootRef }, [
         open.value
           ? h(
@@ -686,11 +697,22 @@ export const AppShell = defineComponent({
     activePath: { type: String, required: true },
     /** The product code of the app rendering this shell. Highlights that row. */
     currentProductCode: { type: String, default: undefined },
+    /**
+     * Where staff admin lives. Shown as "RevHeat staff admin" in the account
+     * menu, only for staff. Since v2.5.0 the header no longer links it.
+     */
     adminHref: { type: String, default: undefined },
     /** In-product screens render with 2+ items, or with a primaryAction. */
     screens: { type: Array as PropType<ShellScreen[]>, default: undefined },
     appearance: { type: String as PropType<"classic" | "ledger">, default: "classic" },
     primaryAction: { type: Object as PropType<ShellScreen>, default: undefined },
+    /**
+     * @deprecated Since v2.5.0 utility screens are no longer rendered — the
+     * header carries no settings links; account, connection and company
+     * settings live in the account menu. Still accepted so existing callers
+     * compile, and still consulted for active-screen resolution only (a
+     * utility route never leaves another tab looking selected).
+     */
     utilityScreens: { type: Array as PropType<ShellScreen[]>, default: () => [] },
     workspace: { type: Object as PropType<PlatformWorkspace | null>, default: null },
   },
@@ -921,6 +943,7 @@ export const AppShell = defineComponent({
                   identity: props.identity,
                   isStaff,
                   adminHref: props.adminHref,
+                  viewerRole: props.viewerRole,
                   hasSignOut: hasSignOut(),
                   navOn,
                   onSignOut: () => emit("sign-out"),
@@ -991,32 +1014,9 @@ export const AppShell = defineComponent({
               ),
               title !== undefined ? h("span", { class: "rh-banner__product" }, title) : null,
             ]),
-            navigation.utilityScreens.length > 0
-              ? h("nav", { class: "rh-banner__utilities", "aria-label": "Utilities" }, navigation.utilityScreens.map(s => screenLink(s, "rh-banner__utility")))
-              : null,
             mobileAction && navigation.primaryAction ? screenLink(navigation.primaryAction, "rh-menu__action") : null,
             slots["header-actions"]
               ? h("div", { class: "rh-banner__actions" }, slots["header-actions"]!())
-              : null,
-            isStaff && props.adminHref
-              ? // Same href as the account menu's "Admin" item, so it gets the
-                // same treatment — one shell must not give one link two
-                // behaviours. `adminHref` is the only consumer-supplied href in
-                // the intercepted set, so it is also the only one that can be
-                // RELATIVE, i.e. same-origin in every app rather than just the
-                // portal. That is the documented contract (same origin + a
-                // navigate hook = route in-app), not an exception: all five
-                // React/Vue consumers pass an absolute app.revheat.com URL
-                // today and are unaffected.
-                h(
-                  "a",
-                  {
-                    class: "rh-banner__admin",
-                    href: props.adminHref,
-                    onClick: navOn(props.adminHref),
-                  },
-                  "Admin",
-                )
               : null,
           ]),
           menuItems.length > 0 || (!mobileAction && navigation.primaryAction)
