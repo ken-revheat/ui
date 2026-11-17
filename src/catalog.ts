@@ -57,7 +57,8 @@ export const PRODUCT_CATALOG: ProductDef[] = [
     appUrl: "https://app.revheat.com/vault", internal: true },
   { code: "trend_finder", slug: "trend-finder", title: "Trend Finder",
     description: "LinkedIn posts from the trends your buyers are reading.",
-    appUrl: "https://trendfinder.revheat.com/app" },
+    // Withdrawn November 17, 2026; mirrored by the API launch policy.
+    appUrl: "https://trendfinder.revheat.com/app", unlaunched: true },
   { code: "readiness_audit", slug: "readiness-audit", title: "Website Readiness Audit",
     description: "Score your website on what moves revenue — with a prioritized fix list, assigned by owner.",
     // Blocked for customers 2026-10-19 (Ken). Already public; mirrors launched:false.
